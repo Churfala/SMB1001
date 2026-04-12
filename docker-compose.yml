@@ -36,9 +36,7 @@ services:
       - smb1001
 
   api:
-    build:
-      context: .
-      dockerfile: api/Dockerfile
+    image: ${REGISTRY:-ghcr.io/YOUR_GITHUB_USERNAME}/smb1001-api:${IMAGE_TAG:-latest}
     container_name: smb1001_api
     restart: unless-stopped
     environment:
