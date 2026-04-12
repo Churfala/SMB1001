@@ -16,12 +16,11 @@ pool.on('error', (err) => {
   console.error('Unexpected PostgreSQL pool error:', err);
 });
 
-/** Execute a query and return all rows. */
 export async function query<T = Record<string, unknown>>(
   text: string,
   params?: unknown[],
 ): Promise<T[]> {
-  const result: QueryResult<T> = await pool.query(text, params);
+  const result = await pool.query(text, params) as any;
   return result.rows;
 }
 
@@ -30,7 +29,7 @@ export async function queryOne<T = Record<string, unknown>>(
   text: string,
   params?: unknown[],
 ): Promise<T | null> {
-  const result: QueryResult<T> = await pool.query(text, params);
+  const result = await pool.query(text, params) as any;
   return result.rows[0] ?? null;
 }
 

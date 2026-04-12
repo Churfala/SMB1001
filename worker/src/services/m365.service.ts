@@ -40,7 +40,7 @@ async function getAccessToken(clientId: string, clientSecret: string, tenantId: 
     client_secret: clientSecret,
     scope: 'https://graph.microsoft.com/.default',
   });
-  const resp = await axios.post(
+  const resp = await axios.post<any>(
     `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
     params.toString(),
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
@@ -57,9 +57,9 @@ async function graphGetAll<T = Record<string, unknown>>(
   let nextUrl: string | null = url;
   let isFirst = true;
   while (nextUrl) {
-    const resp = await client.get(nextUrl, { params: isFirst ? params : undefined });
-    if (Array.isArray(resp.data.value)) results.push(...(resp.data.value as T[]));
-    nextUrl = resp.data['@odata.nextLink'] ?? null;
+    const response: any = await client.get(nextUrl, { params: isFirst ? params : undefined });
+    if (Array.isArray(response.data.value)) results.push(...(response.data.value as T[]));
+    nextUrl = response.data['@odata.nextLink'] ?? null;
     isFirst = false;
   }
   return results;

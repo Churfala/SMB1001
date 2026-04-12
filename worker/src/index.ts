@@ -25,7 +25,7 @@ auditWorker.on('failed', (job: Job | undefined, err: Error) => {
   logger.error({ jobId: job?.id, err: err.message }, 'Job failed');
 });
 
-auditWorker.on('progress', (job: Job, progress: number | object) => {
+auditWorker.on('progress', (job: Job, progress: any) => {
   logger.debug({ jobId: job.id, progress }, 'Job progress');
 });
 

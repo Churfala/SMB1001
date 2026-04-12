@@ -54,17 +54,18 @@ export const reportController = {
       const PdfPrinter = (pdfmake as unknown as { default: { createPdf: (def: unknown, tableLayouts: unknown, fonts: unknown, vfs: unknown) => { getBuffer: (cb: (buf: Buffer) => void) => void } } }).default;
 
       // Use a simpler approach with pdfmake
+      const fontsObj = (pdfFonts as any)?.default?.vfs || {};
       const printer = new (require('pdfmake'))({
         Roboto: {
-          normal: Buffer.from((pdfFonts as unknown as Record<string, Record<string, string>>).default?.vfs?.['Roboto-Regular.ttf'] ?? '', 'base64'),
-          bold: Buffer.from((pdfFonts as unknown as Record<string, Record<string, string>>).default?.vfs?.['Roboto-Medium.ttf'] ?? '', 'base64'),
-          italics: Buffer.from((pdfFonts as unknown as Record<string, Record<string, string>>).default?.vfs?.['Roboto-Italic.ttf'] ?? '', 'base64'),
-          bolditalics: Buffer.from((pdfFonts as unknown as Record<string, Record<string, string>>).default?.vfs?.['Roboto-MediumItalic.ttf'] ?? '', 'base64'),
+          normal: Buffer.from(fontsObj['Roboto-Regular.ttf'] ?? '', 'base64'),
+          bold: Buffer.from(fontsObj['Roboto-Medium.ttf'] ?? '', 'base64'),
+          italics: Buffer.from(fontsObj['Roboto-Italic.ttf'] ?? '', 'base64'),
+          bolditalics: Buffer.from(fontsObj['Roboto-MediumItalic.ttf'] ?? '', 'base64'),
         },
       });
 
-      const pdfDoc = printer.createPdfKitDocument(docDefinition);
-      const chunks: Buffer[] = [];
+      const pdfDoc = printer.createPdfKitDocument(docDefinition as any);
+      const chunks: Array<Buffer> = [];
 
       await new Promise<void>((resolve, reject) => {
         pdfDoc.on('data', (chunk: Buffer) => chunks.push(chunk));

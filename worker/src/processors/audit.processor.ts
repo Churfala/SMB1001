@@ -41,8 +41,8 @@ export async function processAuditJob(
     await job.updateProgress(5);
 
     const [m365Row, googleRow] = await Promise.all([
-      queryOne('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'm365', 'connected']),
-      queryOne('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'google', 'connected']),
+      queryOne<any>('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'm365', 'connected']),
+      queryOne<any>('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'google', 'connected']),
     ]);
 
     let m365Data: M365Data | null = null;
@@ -51,13 +51,13 @@ export async function processAuditJob(
     if (m365Row) {
       try {
         logger.info({ auditId }, 'Collecting M365 data');
-        m365Data = await m365Service.collectData(m365Row as Parameters<typeof m365Service.collectData>[0]);
-        await query('UPDATE integrations SET last_sync = NOW(), status = $1, error_message = NULL WHERE id = $2', ['connected', (m365Row as Record<string, string>).id]);
+        m365Data = await m365Service.collectData(m365Row as any);
+        await query('UPDATE integrations SET last_sync = NOW(), status = $1, error_message = NULL WHERE id = $2', ['connected', (m365Row as any).id]);
         logger.info({ auditId, users: m365Data.users.length }, 'M365 data collected');
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         logger.error({ err: msg, auditId }, 'M365 data collection failed');
-        await query('UPDATE integrations SET status = $1, error_message = $2 WHERE id = $3', ['error', msg.slice(0, 500), (m365Row as Record<string, string>).id]);
+        await query('UPDATE integrations SET status = $1, error_message = $2 WHERE id = $3', ['error', msg.slice(0, 500), (m365Row as any).id]);
       }
     }
 
@@ -66,13 +66,13 @@ export async function processAuditJob(
     if (googleRow) {
       try {
         logger.info({ auditId }, 'Collecting Google Workspace data');
-        googleData = await googleService.collectData(googleRow as Parameters<typeof googleService.collectData>[0]);
-        await query('UPDATE integrations SET last_sync = NOW(), status = $1, error_message = NULL WHERE id = $2', ['connected', (googleRow as Record<string, string>).id]);
+        googleData = await googleService.collectData(googleRow as any);
+        await query('UPDATE integrations SET last_sync = NOW(), status = $1, error_message = NULL WHERE id = $2', ['connected', (googleRow as any).id]);
         logger.info({ auditId, users: googleData.users.length }, 'Google data collected');
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : 'Unknown error';
         logger.error({ err: msg, auditId }, 'Google data collection failed');
-        await query('UPDATE integrations SET status = $1, error_message = $2 WHERE id = $3', ['error', msg.slice(0, 500), (googleRow as Record<string, string>).id]);
+        await query('UPDATE integrations SET status = $1, error_message = $2 WHERE id = $3', ['error', msg.slice(0, 500), (googleRow as any).id]);
       }
     }
 

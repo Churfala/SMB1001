@@ -10,42 +10,70 @@ export async function tenantRoutes(app: FastifyInstance) {
   // ------------------------------------------------------------------
   // Tenants (admin only for create/list-all)
   // ------------------------------------------------------------------
-  app.get('/', { preHandler: [requireRole('admin')] }, tenantController.list);
-  app.post('/', { preHandler: [requireRole('admin')] }, tenantController.create);
+  app.get('/', { preHandler: [requireRole('admin')] as any }, tenantController.list);
+  app.post('/', { preHandler: [requireRole('admin')] as any }, tenantController.create);
   app.get('/:id', tenantController.getOne);
-  app.put('/:id', { preHandler: [requireRole('admin')] }, tenantController.update);
+  app.put('/:id', { preHandler: [requireRole('admin')] as any }, tenantController.update);
 
   // ------------------------------------------------------------------
   // Users within a tenant
   // ------------------------------------------------------------------
-  app.get('/:tenantId/users', {
-    preHandler: [validateTenantAccess, requireRole('admin', 'auditor')],
-  }, tenantController.listUsers);
+  app.get(
+    '/:tenantId/users',
+    {
+      preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any,
+    },
+    tenantController.listUsers,
+  );
 
-  app.post('/:tenantId/users', {
-    preHandler: [validateTenantAccess, requireRole('admin')],
-  }, tenantController.createUser);
+  app.post(
+    '/:tenantId/users',
+    {
+      preHandler: [validateTenantAccess, requireRole('admin')] as any,
+    },
+    tenantController.createUser,
+  );
 
-  app.put('/:tenantId/users/:userId', {
-    preHandler: [validateTenantAccess, requireRole('admin')],
-  }, tenantController.updateUser);
+  app.put(
+    '/:tenantId/users/:userId',
+    {
+      preHandler: [validateTenantAccess, requireRole('admin')] as any,
+    },
+    tenantController.updateUser,
+  );
 
-  app.delete('/:tenantId/users/:userId', {
-    preHandler: [validateTenantAccess, requireRole('admin')],
-  }, tenantController.deleteUser);
+  app.delete(
+    '/:tenantId/users/:userId',
+    {
+      preHandler: [validateTenantAccess, requireRole('admin')] as any,
+    },
+    tenantController.deleteUser,
+  );
 
   // ------------------------------------------------------------------
   // Integrations
   // ------------------------------------------------------------------
-  app.get('/:tenantId/integrations', {
-    preHandler: [validateTenantAccess],
-  }, tenantController.listIntegrations);
+  app.get(
+    '/:tenantId/integrations',
+    {
+      preHandler: [validateTenantAccess] as any,
+    },
+    tenantController.listIntegrations,
+  );
 
-  app.post('/:tenantId/integrations', {
-    preHandler: [validateTenantAccess, requireRole('admin')],
-  }, tenantController.upsertIntegration);
+  app.post(
+    '/:tenantId/integrations',
+    {
+      preHandler: [validateTenantAccess, requireRole('admin')] as any,
+    },
+    tenantController.upsertIntegration,
+  );
 
-  app.delete('/:tenantId/integrations/:integrationId', {
-    preHandler: [validateTenantAccess, requireRole('admin')],
-  }, tenantController.deleteIntegration);
+  app.delete(
+    '/:tenantId/integrations/:integrationId',
+    {
+      preHandler: [validateTenantAccess, requireRole('admin')] as any,
+    },
+    tenantController.deleteIntegration,
+  );
 }
