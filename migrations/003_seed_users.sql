@@ -12,7 +12,7 @@ INSERT INTO users (tenant_id, email, password_hash, role, first_name, last_name,
 SELECT 
   id,
   'test@example.com',
-  '$2b$10$slYQmyNdGzin7olVN3/p2OPST9/PgBkqquzi.Ss8KIUgO2t0jKMm2', -- bcrypt hash of "password123"
+  '$2b$10$blV02z5mKwRBeEX7XwWQoOk5wgQfkp3SLKKB.OI5aGND3Wp8WoD6G', -- bcrypt hash of "password123"
   'admin',
   'Test',
   'User',

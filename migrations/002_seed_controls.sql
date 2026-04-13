@@ -364,7 +364,7 @@ INSERT INTO users (tenant_id, email, password_hash, role, first_name, last_name)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
   'admin@msp.local',
-  '$2b$10$YvKjjrBHQJVHVR5.9F3x5uN3lL0ZRj9dF8Q2gK1wOoX7J8P4uZwGS',
+  '$2b$10$sGgMDEWSYhYtC6.DkPWgTudZoQga6D0A5GjmFERs6wfl3nQLAdJn6',
   'admin',
   'MSP',
   'Admin'
@@ -376,7 +376,7 @@ INSERT INTO users (tenant_id, email, password_hash, role, first_name, last_name)
 VALUES (
   '00000000-0000-0000-0000-000000000002',
   'auditor@acme.local',
-  '$2b$10$YvKjjrBHQJVHVR5.9F3x5uN3lL0ZRj9dF8Q2gK1wOoX7J8P4uZwGS',
+  '$2b$10$KiqZCC1vwl3hbMkCl1lYEOVwBuUQxFfB/DhMnRYJVizkXV6BgmkAe',
   'auditor',
   'Jane',
   'Smith'
