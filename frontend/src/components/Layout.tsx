@@ -46,7 +46,7 @@ export default function Layout() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
           <span style={{ fontWeight: 700, fontSize: 16, color: '#111827', letterSpacing: -0.5 }}>
-            SMB1001 Audit
+            ControlCheck
           </span>
           <div style={{ display: 'flex', gap: 24 }}>
             {navLink('/dashboard', 'Dashboard')}

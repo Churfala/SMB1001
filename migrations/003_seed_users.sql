@@ -1,4 +1,4 @@
--- SMB1001 Audit Platform – Seed Data
+-- ControlCheck – Seed Data
 -- Migration 003: Create test tenant and user
 
 -- Insert test tenant

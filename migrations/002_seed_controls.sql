@@ -1,4 +1,4 @@
--- SMB1001 Audit Platform – Seed Data
+-- ControlCheck – Seed Data
 -- Migration 002: SMB1001 control catalogue + demo tenant/user
 
 -- ============================================================

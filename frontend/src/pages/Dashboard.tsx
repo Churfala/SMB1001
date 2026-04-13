@@ -57,7 +57,7 @@ export default function Dashboard() {
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>
             {currentTenant?.name ?? 'Dashboard'}
           </h1>
-          <p style={{ fontSize: 14, color: '#6b7280', margin: '4px 0 0' }}>SMB1001 Compliance Overview</p>
+          <p style={{ fontSize: 14, color: '#6b7280', margin: '4px 0 0' }}>Compliance Overview</p>
         </div>
         {user?.role !== 'readonly' && (
           <div style={{ display: 'flex', gap: 8 }}>

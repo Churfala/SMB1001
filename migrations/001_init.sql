@@ -1,4 +1,4 @@
--- SMB1001 Audit Platform – Database Schema
+-- ControlCheck – Database Schema
 -- Migration 001: Initial schema
 
 -- Enable UUID generation

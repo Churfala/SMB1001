@@ -59,7 +59,7 @@ export default function Login() {
               <path d="M3 17l9 5 9-5" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>SMB1001 Audit</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>ControlCheck</h1>
           <p style={{ fontSize: 14, color: '#6b7280', margin: '6px 0 0' }}>MSP Compliance Platform</p>
         </div>
 

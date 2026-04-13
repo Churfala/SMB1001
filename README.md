@@ -1,4 +1,4 @@
-# SMB1001 Audit Platform
+# ControlCheck
 
 A production-ready, multi-tenant SMB1001 compliance audit platform for Managed Service Providers (MSPs). Automates evidence collection from Microsoft 365 and Google Workspace, evaluates 26 SMB1001 controls, and generates executive compliance reports.
 
