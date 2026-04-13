@@ -3,7 +3,7 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ .
-ARG VITE_API_URL=/api
+ARG VITE_API_URL=http://smb1001_api:3000
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 

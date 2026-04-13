@@ -18,7 +18,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - smb1001
+      - cftunnel_default
 
   redis:
     image: redis:7-alpine
@@ -33,7 +33,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - smb1001
+      - cftunnel_default
 
   api:
     image: ghcr.io/churfala/smb1001-api:latest
@@ -67,7 +67,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - smb1001
+      - cftunnel_default
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -99,30 +99,14 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - smb1001
+      - cftunnel_default
 
   frontend:
     image: ghcr.io/churfala/smb1001-frontend:latest
     container_name: smb1001_frontend
     restart: unless-stopped
     networks:
-      - smb1001
-
-  nginx:
-    image: nginx:alpine
-    container_name: smb1001_nginx
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - uploads:/var/www/uploads:ro
-    depends_on:
-      - api
-      - frontend
-    networks:
-      - smb1001
+      - cftunnel_default
 
 volumes:
   pgdata:
@@ -133,6 +117,5 @@ volumes:
     name: smb1001_uploads
 
 networks:
-  smb1001:
-    name: smb1001_network
-    driver: bridge
+  cftunnel_default:
+    external: true

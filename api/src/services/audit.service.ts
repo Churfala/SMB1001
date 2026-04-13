@@ -3,7 +3,7 @@ import { query, queryOne } from '../config/database';
 import { redis } from '../config/redis';
 import { Audit, AuditResult, Control, ResultStatus, AuditSchedule } from '../types';
 
-const auditQueue = new Queue('audit:run', { connection: redis });
+const auditQueue = new Queue('audit_run', { connection: redis });
 
 const SEVERITY_WEIGHTS: Record<string, number> = {
   critical: 4,

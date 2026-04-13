@@ -10,7 +10,7 @@ const logger = pino({ level: env.LOG_LEVEL });
 
 logger.info({ concurrency: env.WORKER_CONCURRENCY, env: env.NODE_ENV }, 'Initialising SMB1001 worker');
 
-const auditWorker = new Worker('audit:run', processAuditJob, {
+const auditWorker = new Worker('audit_run', processAuditJob, {
   connection: redis,
   concurrency: env.WORKER_CONCURRENCY,
   removeOnComplete: { age: 7 * 24 * 3600, count: 500 },

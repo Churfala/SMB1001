@@ -75,8 +75,9 @@ async function main(): Promise<void> {
   });
 
   // Connect to Redis (lazy-connect mode)
-  await redis.connect();
-  app.log.info('Redis connected');
+  // Note: @fastify/rate-limit will handle the connection
+  // await redis.connect();
+  // app.log.info('Redis connected');
 
   // Start listening
   await app.listen({ port: env.API_PORT, host: env.API_HOST });

@@ -5,7 +5,7 @@ import { redis } from '../config/redis';
 import pino from 'pino';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
-const auditQueue = new Queue('audit:run', { connection: redis });
+const auditQueue = new Queue('audit_run', { connection: redis });
 
 interface AuditSchedule {
   id: string;
