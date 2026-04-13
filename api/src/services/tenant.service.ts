@@ -116,6 +116,13 @@ export const tenantService = {
     return user;
   },
 
+  async delete(id: string): Promise<void> {
+    const result = await query('DELETE FROM tenants WHERE id = $1', [id]);
+    if ((result as unknown as { rowCount: number }).rowCount === 0) {
+      throw new Error('Tenant not found');
+    }
+  },
+
   async deleteUser(tenantId: string, userId: string): Promise<void> {
     const result = await query('DELETE FROM users WHERE id = $1 AND tenant_id = $2', [userId, tenantId]);
     if ((result as unknown as { rowCount: number }).rowCount === 0) {

@@ -58,6 +58,15 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-10}
+      FRONTEND_URL: ${FRONTEND_URL:-https://controlcheck.globaltechnology.nz}
+      # Entra SSO is now configured in-app via Settings → SSO.
+      # These env vars are an optional fallback for dev/CLI use only.
+      ENTRA_TENANT_ID: ${ENTRA_TENANT_ID:-}
+      ENTRA_CLIENT_ID: ${ENTRA_CLIENT_ID:-}
+      ENTRA_CLIENT_SECRET: ${ENTRA_CLIENT_SECRET:-}
+      ENTRA_REDIRECT_URI: ${ENTRA_REDIRECT_URI:-}
+      ENTRA_SSO_TENANT_SLUG: ${ENTRA_SSO_TENANT_SLUG:-msp-admin}
+      ENTRA_AUTO_PROVISION: ${ENTRA_AUTO_PROVISION:-true}
     volumes:
       - uploads:/app/uploads
     depends_on:

@@ -14,6 +14,7 @@ export async function tenantRoutes(app: FastifyInstance) {
   app.post('/', { preHandler: [requireRole('admin')] as any }, tenantController.create);
   app.get('/:id', tenantController.getOne);
   app.put('/:id', { preHandler: [requireRole('admin')] as any }, tenantController.update);
+  app.delete('/:id', { preHandler: [requireRole('admin')] as any }, tenantController.delete);
 
   // ------------------------------------------------------------------
   // Users within a tenant

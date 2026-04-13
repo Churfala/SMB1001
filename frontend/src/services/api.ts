@@ -58,8 +58,8 @@ api.interceptors.response.use(
 
 // Auth
 export const authApi = {
-  login: (email: string, password: string, tenantSlug: string) =>
-    api.post('/auth/login', { email, password, tenantSlug }).then((r) => r.data),
+  login: (email: string, password: string) =>
+    api.post('/auth/login', { email, password }).then((r) => r.data),
   refresh: (refreshToken: string) =>
     api.post('/auth/refresh', { refreshToken }).then((r) => r.data),
   me: () => api.get('/auth/me').then((r) => r.data),
@@ -83,6 +83,7 @@ export const tenantApi = {
     api.put(`/tenants/${tenantId}/users/${userId}`, data).then((r) => r.data),
   deleteUser: (tenantId: string, userId: string) =>
     api.delete(`/tenants/${tenantId}/users/${userId}`),
+  delete: (id: string) => api.delete(`/tenants/${id}`),
   listIntegrations: (tenantId: string) =>
     api.get(`/tenants/${tenantId}/integrations`).then((r) => r.data),
   upsertIntegration: (tenantId: string, data: Record<string, unknown>) =>
@@ -156,6 +157,14 @@ export const reportApi = {
     link.href = url;
     link.click();
   },
+};
+
+// Settings
+export const settingsApi = {
+  getSsoPublic: () => api.get('/settings/sso/public').then((r) => r.data),
+  getSso: () => api.get('/settings/sso').then((r) => r.data),
+  updateSso: (data: Record<string, unknown>) =>
+    api.put('/settings/sso', data).then((r) => r.data),
 };
 
 export default api;

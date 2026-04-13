@@ -8,11 +8,10 @@ export async function authRoutes(app: FastifyInstance) {
     schema: {
       body: {
         type: 'object',
-        required: ['email', 'password', 'tenantSlug'],
+        required: ['email', 'password'],
         properties: {
           email: { type: 'string', format: 'email' },
           password: { type: 'string', minLength: 1 },
-          tenantSlug: { type: 'string', minLength: 1 },
         },
       },
     },
@@ -33,6 +32,12 @@ export async function authRoutes(app: FastifyInstance) {
 
   // GET /auth/me  (requires auth)
   app.get('/me', { preHandler: [authenticate] }, authController.me);
+
+  // GET /auth/sso  — redirect to configured OIDC provider (redirect flow only)
+  app.get('/sso', authController.ssoLogin);
+
+  // GET /auth/sso/callback  — OIDC provider redirects back here
+  app.get('/sso/callback', authController.ssoCallback);
 
   // POST /auth/change-password
   app.post('/change-password', { preHandler: [authenticate] }, authController.changePassword);

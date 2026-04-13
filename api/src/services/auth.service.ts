@@ -18,20 +18,15 @@ interface RefreshPayload {
 }
 
 export const authService = {
-  async login(email: string, password: string, tenantSlug: string): Promise<LoginResult> {
-    // Look up the tenant
-    const tenant = await queryOne<{ id: string; name: string; slug: string; status: string }>(
-      'SELECT id, name, slug, status FROM tenants WHERE slug = $1',
-      [tenantSlug],
-    );
-    if (!tenant || tenant.status !== 'active') {
-      throw new Error('Invalid credentials');
-    }
-
-    // Look up the user within that tenant
+  async login(email: string, password: string): Promise<LoginResult> {
+    // Find the user by email across all active tenants
     const user = await queryOne<User>(
-      'SELECT * FROM users WHERE email = $1 AND tenant_id = $2 AND is_active = true',
-      [email.toLowerCase(), tenant.id],
+      `SELECT u.* FROM users u
+       JOIN tenants t ON t.id = u.tenant_id
+       WHERE LOWER(u.email) = $1 AND u.is_active = true AND t.status = 'active'
+       ORDER BY u.created_at ASC
+       LIMIT 1`,
+      [email.toLowerCase()],
     );
     if (!user) {
       throw new Error('Invalid credentials');
@@ -40,6 +35,14 @@ export const authService = {
     // Verify password
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      throw new Error('Invalid credentials');
+    }
+
+    const tenant = await queryOne<{ id: string; name: string; slug: string }>(
+      'SELECT id, name, slug FROM tenants WHERE id = $1',
+      [user.tenant_id],
+    );
+    if (!tenant) {
       throw new Error('Invalid credentials');
     }
 

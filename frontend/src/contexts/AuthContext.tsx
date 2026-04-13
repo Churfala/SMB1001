@@ -3,7 +3,7 @@ import { authApi, setAuthToken, setRefreshToken, setUnauthorizedHandler } from '
 import type { User, AuthState } from '../types';
 
 interface AuthContextValue extends AuthState {
-  login: (email: string, password: string, tenantSlug: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -50,8 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [logout]);
 
-  const login = async (email: string, password: string, tenantSlug: string) => {
-    const data = await authApi.login(email, password, tenantSlug);
+  const login = async (email: string, password: string) => {
+    const data = await authApi.login(email, password);
     const { accessToken, refreshToken, user } = data;
 
     localStorage.setItem('accessToken', accessToken);

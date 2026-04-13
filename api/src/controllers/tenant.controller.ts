@@ -69,6 +69,30 @@ export const tenantController = {
     }
   },
 
+  async delete(request: FastifyRequest, reply: FastifyReply) {
+    const { id } = request.params as { id: string };
+
+    // Prevent admins from deleting the tenant their own account belongs to
+    if (id === request.user.tenant_id) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'You cannot delete the tenant your account belongs to' });
+    }
+
+    try {
+      await tenantService.delete(id);
+      await auditLogService.log({
+        tenantId: request.user.tenant_id,
+        userId: request.user.sub,
+        action: 'tenant.deleted',
+        resourceType: 'tenant',
+        resourceId: id,
+      });
+      return reply.status(204).send();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to delete tenant';
+      return reply.status(400).send({ error: 'Bad Request', message });
+    }
+  },
+
   // ------------------------------------------------------------------
   // Users within a tenant
   // ------------------------------------------------------------------

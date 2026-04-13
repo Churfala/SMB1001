@@ -52,6 +52,7 @@ export default function Layout() {
             {navLink('/dashboard', 'Dashboard')}
             {navLink('/controls', 'Controls')}
             {user?.role === 'admin' && navLink('/tenants', 'Tenants')}
+            {navLink('/settings', 'Settings')}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

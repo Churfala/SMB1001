@@ -28,4 +28,15 @@ export const env = {
 
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   WORKER_CONCURRENCY: parseInt(process.env.WORKER_CONCURRENCY || '5', 10),
+
+  // Entra ID SSO (OIDC)
+  ENTRA_TENANT_ID: process.env.ENTRA_TENANT_ID || '',
+  ENTRA_CLIENT_ID: process.env.ENTRA_CLIENT_ID || '',
+  ENTRA_CLIENT_SECRET: process.env.ENTRA_CLIENT_SECRET || '',
+  ENTRA_REDIRECT_URI: process.env.ENTRA_REDIRECT_URI || '',
+  ENTRA_SSO_TENANT_SLUG: process.env.ENTRA_SSO_TENANT_SLUG || 'msp-admin',
+  ENTRA_AUTO_PROVISION: process.env.ENTRA_AUTO_PROVISION !== 'false',
+
+  // Frontend URL (for SSO redirects)
+  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
 } as const;
