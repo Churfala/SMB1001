@@ -79,7 +79,7 @@ CREATE TABLE controls (
                          CHECK (integration_type IN ('m365', 'google', 'both', 'none')),
   evidence_requirements TEXT,
   remediation_guidance  TEXT,
-  references            TEXT[],
+  "references"          TEXT[],
   is_active             BOOLEAN NOT NULL DEFAULT true,
   created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()

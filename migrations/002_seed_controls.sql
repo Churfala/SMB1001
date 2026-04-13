@@ -8,7 +8,7 @@
 
 INSERT INTO controls
   (control_id, name, description, category, severity, validation_type,
-   integration_type, evidence_requirements, remediation_guidance, references)
+   integration_type, evidence_requirements, remediation_guidance, "references")
 VALUES
 
 -- ---------------------------------------------------------------

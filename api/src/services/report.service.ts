@@ -33,7 +33,7 @@ export const reportService = {
               c.severity,
               c.description,
               c.remediation_guidance,
-              c.references,
+              c."references",
               u.first_name || ' ' || u.last_name AS reviewer_name
        FROM audit_results ar
        JOIN controls c ON c.id = ar.control_id
