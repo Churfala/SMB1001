@@ -61,6 +61,5 @@ jobs:
           build-args: |
             VITE_API_URL=https://controlcheckapi.globaltechnology.nz
 
-      - name: Trigger Portainer redeploy
-        run: |
-          curl -fsS -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
+      - name: Images pushed
+        run: echo "All images pushed to GHCR. Redeploy the stack manually in Portainer to pick up the new images."
