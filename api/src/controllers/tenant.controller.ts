@@ -260,4 +260,16 @@ export const tenantController = {
     });
     return reply.status(204).send();
   },
+
+  async getSecureScore(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId } = request.params as { tenantId: string };
+    try {
+      const score = await integrationService.getM365SecureScore(tenantId);
+      if (!score) return reply.status(404).send({ error: 'Not Found', message: 'No M365 integration or score unavailable' });
+      return reply.send(score);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to fetch Secure Score';
+      return reply.status(502).send({ error: 'Bad Gateway', message });
+    }
+  },
 };

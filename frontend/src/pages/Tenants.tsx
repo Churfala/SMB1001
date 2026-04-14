@@ -289,7 +289,11 @@ export default function Tenants() {
                       {f.tab === 'm365' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                           <p style={{ margin: '0 0 4px', fontSize: 12, color: '#6b7280' }}>
-                            Register an App in Azure Entra ID with <strong>Mail.Read</strong>, <strong>User.Read.All</strong>, and <strong>Directory.Read.All</strong> application permissions.
+                            Register an App in Azure Entra ID with these <strong>application</strong> permissions (no user sign-in required):{' '}
+                            <strong>User.Read.All</strong>, <strong>Directory.Read.All</strong>, <strong>Policy.Read.All</strong>,{' '}
+                            <strong>AuditLog.Read.All</strong>, <strong>UserAuthenticationMethod.Read.All</strong>,{' '}
+                            <strong>Reports.Read.All</strong>, <strong>SecurityEvents.Read.All</strong>.
+                            Grant admin consent after adding them.
                           </p>
                           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                             <div style={{ flex: 1, minWidth: 180 }}>

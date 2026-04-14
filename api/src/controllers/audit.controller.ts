@@ -295,4 +295,43 @@ export const auditController = {
     await auditService.deleteSchedule(tenantId, scheduleId);
     return reply.status(204).send();
   },
+
+  // ------------------------------------------------------------------
+  // Run-now + weekly schedule
+  // ------------------------------------------------------------------
+  async runNow(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId } = request.params as { tenantId: string };
+
+    // Guard: reject if audit already active for this tenant
+    const active = await queryOne<{ id: string }>(
+      `SELECT id FROM audits WHERE tenant_id = $1 AND status IN ('pending','queued','running') LIMIT 1`,
+      [tenantId],
+    );
+    if (active) {
+      return reply.status(409).send({ error: 'Conflict', message: 'An audit is already running or queued' });
+    }
+
+    const audit = await auditService.runNow(tenantId, request.user.sub);
+    await auditLogService.log({
+      tenantId,
+      userId: request.user.sub,
+      action: 'audit.queued',
+      resourceType: 'audit',
+      resourceId: audit.id,
+    });
+    return reply.status(201).send(audit);
+  },
+
+  async getWeeklySchedule(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId } = request.params as { tenantId: string };
+    const result = await auditService.getWeeklySchedule(tenantId);
+    return reply.send(result);
+  },
+
+  async setWeeklySchedule(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId } = request.params as { tenantId: string };
+    const { enabled } = request.body as { enabled: boolean };
+    const result = await auditService.setWeeklySchedule(tenantId, !!enabled, request.user.sub);
+    return reply.send(result);
+  },
 };

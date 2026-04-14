@@ -77,4 +77,10 @@ export async function tenantRoutes(app: FastifyInstance) {
     },
     tenantController.deleteIntegration,
   );
+
+  app.get(
+    '/:tenantId/secure-score',
+    { preHandler: [validateTenantAccess] as any },
+    tenantController.getSecureScore,
+  );
 }

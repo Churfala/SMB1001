@@ -39,11 +39,11 @@ export function startScheduler(): void {
 
       for (const schedule of due) {
         try {
-          const dateStr = now.toISOString().split('T')[0];
+          const dateStr = now.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
           const [audit] = await query<{ id: string }>(
             `INSERT INTO audits (tenant_id, name, status, created_by)
              VALUES ($1, $2, 'queued', $3) RETURNING id`,
-            [schedule.tenant_id, `Scheduled: ${schedule.name} — ${dateStr}`, schedule.created_by],
+            [schedule.tenant_id, `${schedule.name} — ${dateStr}`, schedule.created_by],
           );
 
           const job = await auditQueue.add(

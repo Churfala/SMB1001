@@ -3,6 +3,7 @@ import { controlApi, assessmentApi } from '../services/api';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import type { Control, Assessment, AssessmentEvidence, AssessmentStatus } from '../types';
+import { TIERS, tierInfo } from '../utils/tiers';
 
 // Domain display order
 const DOMAIN_ORDER = [
@@ -52,6 +53,7 @@ export default function Controls() {
   const [controls, setControls] = useState<Control[]>([]);
   const [assessmentMap, setAssessmentMap] = useState<Map<string, Assessment>>(new Map());
   const [loading, setLoading] = useState(true);
+  const [selectedTier, setSelectedTier] = useState<number | null>(null);
 
   // Drawer state
   const [selectedControl, setSelectedControl] = useState<Control | null>(null);
@@ -177,10 +179,14 @@ export default function Controls() {
     }
   };
 
-  // ── Group controls by domain ─────────────────────────────────────────
+  // ── Group controls by domain (respecting tier filter) ───────────────
+  const visibleControls = selectedTier === null
+    ? controls
+    : controls.filter((c) => c.tier <= selectedTier);
+
   const grouped = DOMAIN_ORDER.map((domain) => ({
     domain,
-    controls: controls.filter((c) => c.category === domain),
+    controls: visibleControls.filter((c) => c.category === domain),
   })).filter((g) => g.controls.length > 0);
 
   if (loading) {
@@ -194,11 +200,42 @@ export default function Controls() {
   return (
     <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#111827' }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Controls</h1>
         <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
           SMB1001:2026 compliance register — {controls.length} controls across {grouped.length} domains
         </p>
+      </div>
+
+      {/* Tier filter bar */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: '#9ca3af', fontWeight: 500 }}>Filter by level:</span>
+        <button
+          onClick={() => setSelectedTier(null)}
+          style={{
+            padding: '4px 12px', fontSize: 12, fontWeight: 500, borderRadius: 6, cursor: 'pointer',
+            border: `1px solid ${selectedTier === null ? '#6b7280' : '#e5e7eb'}`,
+            backgroundColor: selectedTier === null ? '#374151' : '#fff',
+            color: selectedTier === null ? '#fff' : '#374151',
+          }}
+        >
+          All
+        </button>
+        {TIERS.map((t) => (
+          <button
+            key={t.tier}
+            onClick={() => setSelectedTier(selectedTier === t.tier ? null : t.tier)}
+            style={{
+              padding: '4px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+              border: `1px solid ${selectedTier === t.tier ? t.color : '#e5e7eb'}`,
+              backgroundColor: selectedTier === t.tier ? t.bg : '#fff',
+              color: selectedTier === t.tier ? t.color : '#6b7280',
+              transition: 'all 0.15s',
+            }}
+          >
+            {t.tier === 3 ? `★ ${t.name}` : t.name}
+          </button>
+        ))}
       </div>
 
       {/* Domain sections */}
@@ -254,13 +291,15 @@ export default function Controls() {
                       }}>
                         {control.control_id}
                       </span>
-                      <span style={{
-                        fontSize: 10, color: '#9ca3af',
-                        backgroundColor: '#f3f4f6', borderRadius: 4,
-                        padding: '2px 5px',
-                      }}>
-                        T{control.tier}
-                      </span>
+                      {(() => { const ti = tierInfo(control.tier); return (
+                        <span style={{
+                          fontSize: 10, fontWeight: 600, color: ti.color,
+                          backgroundColor: ti.bg, borderRadius: 4,
+                          padding: '2px 5px',
+                        }}>
+                          {ti.name}
+                        </span>
+                      ); })()}
                       {control.validation_type === 'automated' && (
                         <span style={{
                           fontSize: 10, color: '#2563eb',
@@ -400,9 +439,11 @@ function DrawerContent({
               }}>
                 {control.control_id}
               </span>
-              <span style={{ fontSize: 11, color: '#9ca3af', backgroundColor: '#f3f4f6', borderRadius: 4, padding: '2px 6px' }}>
-                Tier {control.tier}
-              </span>
+              {(() => { const ti = tierInfo(control.tier); return (
+                <span style={{ fontSize: 11, fontWeight: 600, color: ti.color, backgroundColor: ti.bg, borderRadius: 4, padding: '2px 6px' }}>
+                  {ti.name}
+                </span>
+              ); })()}
               {control.validation_type === 'automated' && (
                 <span style={{ fontSize: 11, color: '#2563eb', backgroundColor: '#dbeafe', borderRadius: 4, padding: '2px 6px' }}>
                   Automated

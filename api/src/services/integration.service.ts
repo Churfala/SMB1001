@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { query, queryOne } from '../config/database';
 import { encrypt, decrypt } from './encryption.service';
 import { Integration, IntegrationType } from '../types';
@@ -85,5 +86,50 @@ export const integrationService = {
       'UPDATE integrations SET status = $1, error_message = $2, updated_at = NOW() WHERE tenant_id = $3 AND type = $4',
       ['error', message, tenantId, type],
     );
+  },
+
+  /** Fetch the current Microsoft Secure Score for a tenant via Graph API. */
+  async getM365SecureScore(tenantId: string): Promise<{
+    currentScore: number;
+    maxScore: number;
+    percentage: number;
+    lastRefresh: string;
+  } | null> {
+    const integration = await this.getDecrypted(tenantId, 'm365');
+    if (!integration || integration.status !== 'connected' || !integration.client_secret) return null;
+
+    const m365TenantId = (integration.metadata as Record<string, unknown>)?.tenant_id as string | undefined;
+    if (!m365TenantId) return null;
+
+    // Get Graph access token
+    const tokenRes = await axios.post<{ access_token: string }>(
+      `https://login.microsoftonline.com/${m365TenantId}/oauth2/v2.0/token`,
+      new URLSearchParams({
+        grant_type: 'client_credentials',
+        client_id: integration.client_id!,
+        client_secret: integration.client_secret,
+        scope: 'https://graph.microsoft.com/.default',
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+    );
+    const token = tokenRes.data.access_token;
+
+    const scoreRes = await axios.get<{ value: Array<{ currentScore: number; maxScore: number; createdDateTime: string }> }>(
+      'https://graph.microsoft.com/v1.0/security/secureScores',
+      {
+        params: { $top: 1 },
+        headers: { Authorization: `Bearer ${token}` },
+      },
+    );
+
+    const score = scoreRes.data.value?.[0];
+    if (!score) return null;
+
+    return {
+      currentScore: Math.round(score.currentScore * 10) / 10,
+      maxScore: Math.round(score.maxScore * 10) / 10,
+      percentage: Math.round((score.currentScore / score.maxScore) * 1000) / 10,
+      lastRefresh: score.createdDateTime,
+    };
   },
 };

@@ -104,6 +104,30 @@ export async function auditRoutes(app: FastifyInstance) {
   );
 
   // ------------------------------------------------------------------
+  // Run-now + weekly schedule
+  // ------------------------------------------------------------------
+  app.post(
+    '/:tenantId/audits/run-now',
+    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any },
+    auditController.runNow,
+  );
+
+  app.get(
+    '/:tenantId/weekly-schedule',
+    { preHandler: [validateTenantAccess] as any },
+    auditController.getWeeklySchedule,
+  );
+
+  app.put(
+    '/:tenantId/weekly-schedule',
+    {
+      schema: { body: { type: 'object', required: ['enabled'], properties: { enabled: { type: 'boolean' } } } },
+      preHandler: [validateTenantAccess, requireRole('admin')] as any,
+    },
+    auditController.setWeeklySchedule,
+  );
+
+  // ------------------------------------------------------------------
   // Schedules
   // ------------------------------------------------------------------
   app.get(

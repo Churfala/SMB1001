@@ -91,9 +91,11 @@ export interface AuditResult {
   control_name: string;
   category: string;
   severity: ControlSeverity;
+  tier: number;
   description: string;
   remediation_guidance: string | null;
   evidence_requirements: string | null;
+  validation_type: 'automated' | 'manual' | 'hybrid';
   status: ResultStatus;
   score: number | null;
   notes: string | null;

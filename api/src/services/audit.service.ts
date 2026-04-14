@@ -50,6 +50,7 @@ export const auditService = {
               c.name       AS control_name,
               c.category,
               c.severity,
+              c.tier,
               c.description,
               c.remediation_guidance,
               c.evidence_requirements,
@@ -61,13 +62,8 @@ export const auditService = {
        LEFT JOIN users u ON u.id = ar.reviewed_by
        WHERE ar.audit_id = $1
        ORDER BY
-         CASE c.severity
-           WHEN 'critical' THEN 1 WHEN 'high' THEN 2
-           WHEN 'medium' THEN 3   WHEN 'low'  THEN 4
-           ELSE 5
-         END,
-         c.category,
-         c.control_id`,
+         SPLIT_PART(c.control_id, '.', 1)::INTEGER,
+         SPLIT_PART(c.control_id, '.', 2)::INTEGER`,
       [auditId],
     );
 
@@ -276,5 +272,48 @@ export const auditService = {
 
   async deleteSchedule(tenantId: string, scheduleId: string): Promise<void> {
     await query('DELETE FROM audit_schedules WHERE id = $1 AND tenant_id = $2', [scheduleId, tenantId]);
+  },
+
+  // ---------------------------------------------------------------
+  // Run-now + weekly schedule helpers
+  // ---------------------------------------------------------------
+
+  /** Create and immediately queue an audit with an auto-generated name. */
+  async runNow(tenantId: string, userId: string): Promise<Audit> {
+    const date = new Date();
+    const name = `Manual Audit — ${date.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    const audit = await this.create(tenantId, name, userId);
+    await this.queueRun(audit.id, tenantId);
+    return this.getById(audit.id, tenantId) as Promise<Audit>;
+  },
+
+  /** Enable or disable the weekly (Monday 9am) auto-run for a tenant. */
+  async setWeeklySchedule(tenantId: string, enabled: boolean, userId: string): Promise<{ enabled: boolean; next_run: string | null }> {
+    if (enabled) {
+      const nextMonday = new Date();
+      nextMonday.setDate(nextMonday.getDate() + ((8 - nextMonday.getDay()) % 7 || 7));
+      nextMonday.setHours(9, 0, 0, 0);
+
+      await query(
+        `INSERT INTO audit_schedules (tenant_id, name, cron_expression, is_active, created_by, next_run)
+         VALUES ($1, 'Weekly Audit', '0 9 * * 1', true, $2, $3)
+         ON CONFLICT (tenant_id) DO UPDATE SET
+           is_active = true, next_run = EXCLUDED.next_run, updated_at = NOW()`,
+        [tenantId, userId, nextMonday],
+      );
+      return { enabled: true, next_run: nextMonday.toISOString() };
+    } else {
+      await query('DELETE FROM audit_schedules WHERE tenant_id = $1', [tenantId]);
+      return { enabled: false, next_run: null };
+    }
+  },
+
+  /** Get the weekly schedule state for a tenant. */
+  async getWeeklySchedule(tenantId: string): Promise<{ enabled: boolean; next_run: string | null }> {
+    const row = await queryOne<{ is_active: boolean; next_run: string | null }>(
+      'SELECT is_active, next_run FROM audit_schedules WHERE tenant_id = $1',
+      [tenantId],
+    );
+    return { enabled: row?.is_active ?? false, next_run: row?.next_run ?? null };
   },
 };
