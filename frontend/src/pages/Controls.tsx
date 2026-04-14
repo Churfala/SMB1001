@@ -127,10 +127,9 @@ export default function Controls() {
     try {
       const current = drawerAssessment;
       const updated = await assessmentApi.upsert(currentTenant.id, selectedControl.control_id, {
-        status: current?.status ?? 'not_assessed',
-        notes: current?.notes ?? null,
-        review_date: current?.review_date ?? null,
-        [field]: value,
+        status:      field === 'status'      ? value : (current?.status ?? 'not_assessed'),
+        notes:       field === 'notes'       ? value : (current?.notes ?? null),
+        review_date: field === 'review_date' ? value : (current?.review_date ?? null),
       });
       const newAsm: Assessment = {
         control_db_id: selectedControl.id,
