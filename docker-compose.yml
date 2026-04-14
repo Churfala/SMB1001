@@ -35,7 +35,7 @@ services:
       - smb1001
 
   api:
-    image: ${REGISTRY:-ghcr.io/churfala}/smb1001-api:${IMAGE_TAG:-latest}
+    image: ghcr.io/churfala/smb1001-api:latest
     container_name: smb1001_api
     restart: unless-stopped
     environment:
@@ -85,7 +85,7 @@ services:
       start_period: 15s
 
   worker:
-    image: ${REGISTRY:-ghcr.io/churfala}/smb1001-worker:${IMAGE_TAG:-latest}
+    image: ghcr.io/churfala/smb1001-worker:latest
     container_name: smb1001_worker
     restart: unless-stopped
     environment:
@@ -111,7 +111,7 @@ services:
       - smb1001
 
   frontend:
-    image: ${REGISTRY:-ghcr.io/churfala}/smb1001-frontend:${IMAGE_TAG:-latest}
+    image: ghcr.io/churfala/smb1001-frontend:latest
     container_name: smb1001_frontend
     restart: unless-stopped
     networks:
