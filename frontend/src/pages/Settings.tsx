@@ -10,7 +10,7 @@ const suggestedCallback = `${API_BASE.startsWith('http') ? API_BASE : window.loc
 // ---------------------------------------------------------------------------
 // Provider presets
 // ---------------------------------------------------------------------------
-type ProviderKey = 'entra' | 'google' | 'cloudflare' | 'okta' | 'custom';
+type ProviderKey = 'entra' | 'cloudflare' | 'okta' | 'custom';
 
 interface Preset {
   label: string;
@@ -44,27 +44,6 @@ const PRESETS: Record<ProviderKey, Preset> = {
         <p style={{ marginTop: 8, color: '#6b7280', fontSize: 12 }}>
           The token endpoint and authorization URL are built automatically from your Tenant ID.
         </p>
-      </div>
-    ),
-  },
-  google: {
-    label: 'Google Workspace',
-    buildUrls: () => ({
-      authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
-      token_url: 'https://oauth2.googleapis.com/token',
-    }),
-    scopes: 'openid email profile',
-    instructions: (
-      <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
-        <p style={{ fontWeight: 600, marginBottom: 8 }}>How to register the app in Google Cloud</p>
-        <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <li>Go to <strong>console.cloud.google.com</strong> → select or create a project.</li>
-          <li>Navigate to <strong>APIs &amp; Services</strong> → <strong>OAuth consent screen</strong>. Set user type to <em>Internal</em> (Google Workspace) and fill in the app name.</li>
-          <li>Go to <strong>Credentials</strong> → <strong>Create credentials</strong> → <strong>OAuth client ID</strong>. Application type: <em>Web application</em>.</li>
-          <li>Under <strong>Authorized redirect URIs</strong>, add the Redirect URI shown below. Click <strong>Create</strong>.</li>
-          <li>Copy the <strong>Client ID</strong> and <strong>Client secret</strong> shown in the dialog.</li>
-          <li>Paste them into the fields below and save.</li>
-        </ol>
       </div>
     ),
   },

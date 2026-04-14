@@ -14,14 +14,11 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
 };
 
 const EMPTY_M365 = { client_id: '', client_secret: '', tenant_id: '' };
-const EMPTY_GOOGLE = { service_account_json: '', admin_email: '', customer_id: '' };
 
 type IntForms = {
   m365: typeof EMPTY_M365;
-  google: typeof EMPTY_GOOGLE;
-  saving: 'm365' | 'google' | null;
+  saving: boolean;
   error: string;
-  tab: 'm365' | 'google';
 };
 
 export default function Tenants() {
@@ -37,7 +34,7 @@ export default function Tenants() {
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const getForm = (tenantId: string): IntForms =>
-    forms[tenantId] ?? { m365: { ...EMPTY_M365 }, google: { ...EMPTY_GOOGLE }, saving: null, error: '', tab: 'm365' };
+    forms[tenantId] ?? { m365: { ...EMPTY_M365 }, saving: false, error: '' };
 
   const setForm = (tenantId: string, patch: Partial<IntForms>) =>
     setForms((prev) => ({ ...prev, [tenantId]: { ...getForm(tenantId), ...patch } }));
@@ -67,7 +64,7 @@ export default function Tenants() {
 
   const handleSaveM365 = async (tenantId: string) => {
     const f = getForm(tenantId);
-    setForm(tenantId, { saving: 'm365', error: '' });
+    setForm(tenantId, { saving: true, error: '' });
     try {
       await tenantApi.upsertIntegration(tenantId, {
         type: 'm365',
@@ -75,44 +72,13 @@ export default function Tenants() {
         client_secret: f.m365.client_secret,
         metadata: { tenant_id: f.m365.tenant_id },
       });
-      // Reload integrations list for this tenant
       const d = await tenantApi.listIntegrations(tenantId);
       setIntegrations((prev) => ({ ...prev, [tenantId]: d.integrations ?? [] }));
-      setForm(tenantId, { m365: { ...EMPTY_M365 }, saving: null });
+      setForm(tenantId, { m365: { ...EMPTY_M365 }, saving: false });
     } catch (err: unknown) {
       setForm(tenantId, {
-        saving: null,
+        saving: false,
         error: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to save M365 integration',
-      });
-    }
-  };
-
-  const handleSaveGoogle = async (tenantId: string) => {
-    const f = getForm(tenantId);
-    setForm(tenantId, { saving: 'google', error: '' });
-    let serviceAccount: unknown;
-    try {
-      serviceAccount = JSON.parse(f.google.service_account_json);
-    } catch {
-      setForm(tenantId, { saving: null, error: 'Service account JSON is not valid JSON' });
-      return;
-    }
-    try {
-      await tenantApi.upsertIntegration(tenantId, {
-        type: 'google',
-        metadata: {
-          service_account: serviceAccount,
-          admin_email: f.google.admin_email,
-          customer_id: f.google.customer_id,
-        },
-      });
-      const d = await tenantApi.listIntegrations(tenantId);
-      setIntegrations((prev) => ({ ...prev, [tenantId]: d.integrations ?? [] }));
-      setForm(tenantId, { google: { ...EMPTY_GOOGLE }, saving: null });
-    } catch (err: unknown) {
-      setForm(tenantId, {
-        saving: null,
-        error: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to save Google integration',
       });
     }
   };
@@ -256,129 +222,63 @@ export default function Tenants() {
                     )}
                   </div>
 
-                  {/* Configure integration */}
+                  {/* Configure M365 integration */}
                   <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, backgroundColor: '#fff', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
-                      {(['m365', 'google'] as const).map((tab) => (
-                        <button
-                          key={tab}
-                          onClick={() => setForm(tenant.id, { tab })}
-                          style={{
-                            padding: '8px 16px',
-                            fontSize: 13,
-                            fontWeight: 500,
-                            border: 'none',
-                            borderBottom: f.tab === tab ? '2px solid #2563eb' : '2px solid transparent',
-                            backgroundColor: 'transparent',
-                            color: f.tab === tab ? '#2563eb' : '#6b7280',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          {tab === 'm365' ? 'Microsoft 365' : 'Google Workspace'}
-                        </button>
-                      ))}
+                    <div style={{ padding: '10px 16px', borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Microsoft 365 Integration</span>
                     </div>
-
                     <div style={{ padding: 16 }}>
                       {f.error && (
                         <div style={{ backgroundColor: '#fee2e2', color: '#991b1b', padding: '8px 12px', borderRadius: 6, fontSize: 12, marginBottom: 12 }}>
                           {f.error}
                         </div>
                       )}
-
-                      {f.tab === 'm365' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#6b7280' }}>
-                            Register an App in Azure Entra ID with these <strong>application</strong> permissions (no user sign-in required):{' '}
-                            <strong>User.Read.All</strong>, <strong>Directory.Read.All</strong>, <strong>Policy.Read.All</strong>,{' '}
-                            <strong>AuditLog.Read.All</strong>, <strong>UserAuthenticationMethod.Read.All</strong>,{' '}
-                            <strong>Reports.Read.All</strong>, <strong>SecurityEvents.Read.All</strong>.
-                            Grant admin consent after adding them.
-                          </p>
-                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <label style={labelStyle}>Application (Client) ID</label>
-                              <input
-                                value={f.m365.client_id}
-                                onChange={(e) => setForm(tenant.id, { m365: { ...f.m365, client_id: e.target.value } })}
-                                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                                style={inputStyle}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <label style={labelStyle}>Directory (Tenant) ID</label>
-                              <input
-                                value={f.m365.tenant_id}
-                                onChange={(e) => setForm(tenant.id, { m365: { ...f.m365, tenant_id: e.target.value } })}
-                                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                                style={inputStyle}
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <label style={labelStyle}>Client Secret</label>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <p style={{ margin: '0 0 4px', fontSize: 12, color: '#6b7280' }}>
+                          Register an App in Azure Entra ID with these <strong>application</strong> permissions (no user sign-in required):{' '}
+                          <strong>User.Read.All</strong>, <strong>Directory.Read.All</strong>, <strong>Policy.Read.All</strong>,{' '}
+                          <strong>AuditLog.Read.All</strong>, <strong>UserAuthenticationMethod.Read.All</strong>,{' '}
+                          <strong>Reports.Read.All</strong>, <strong>SecurityEvents.Read.All</strong>.
+                          Grant admin consent after adding them.
+                        </p>
+                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <div style={{ flex: 1, minWidth: 180 }}>
+                            <label style={labelStyle}>Application (Client) ID</label>
                             <input
-                              type="password"
-                              value={f.m365.client_secret}
-                              onChange={(e) => setForm(tenant.id, { m365: { ...f.m365, client_secret: e.target.value } })}
-                              placeholder="••••••••••••••••"
-                              style={{ ...inputStyle, width: '100%' }}
+                              value={f.m365.client_id}
+                              onChange={(e) => setForm(tenant.id, { m365: { ...f.m365, client_id: e.target.value } })}
+                              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                              style={inputStyle}
                             />
                           </div>
-                          <button
-                            onClick={() => handleSaveM365(tenant.id)}
-                            disabled={f.saving === 'm365' || !f.m365.client_id || !f.m365.client_secret || !f.m365.tenant_id}
-                            style={saveButtonStyle(f.saving === 'm365')}
-                          >
-                            {f.saving === 'm365' ? 'Saving…' : 'Save M365 Integration'}
-                          </button>
-                        </div>
-                      )}
-
-                      {f.tab === 'google' && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <p style={{ margin: '0 0 4px', fontSize: 12, color: '#6b7280' }}>
-                            Create a Google Workspace service account with <strong>domain-wide delegation</strong>, download the JSON key, and paste it below.
-                          </p>
-                          <div>
-                            <label style={labelStyle}>Service Account JSON Key</label>
-                            <textarea
-                              value={f.google.service_account_json}
-                              onChange={(e) => setForm(tenant.id, { google: { ...f.google, service_account_json: e.target.value } })}
-                              placeholder='{"type":"service_account","project_id":"...","private_key_id":"...",...}'
-                              rows={5}
-                              style={{ ...inputStyle, width: '100%', height: 'auto', resize: 'vertical', fontFamily: 'monospace', fontSize: 11 }}
+                          <div style={{ flex: 1, minWidth: 180 }}>
+                            <label style={labelStyle}>Directory (Tenant) ID</label>
+                            <input
+                              value={f.m365.tenant_id}
+                              onChange={(e) => setForm(tenant.id, { m365: { ...f.m365, tenant_id: e.target.value } })}
+                              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                              style={inputStyle}
                             />
                           </div>
-                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                            <div style={{ flex: 1, minWidth: 180 }}>
-                              <label style={labelStyle}>Admin Email (impersonated)</label>
-                              <input
-                                value={f.google.admin_email}
-                                onChange={(e) => setForm(tenant.id, { google: { ...f.google, admin_email: e.target.value } })}
-                                placeholder="admin@yourdomain.com"
-                                style={inputStyle}
-                              />
-                            </div>
-                            <div style={{ flex: 1, minWidth: 140 }}>
-                              <label style={labelStyle}>Customer ID</label>
-                              <input
-                                value={f.google.customer_id}
-                                onChange={(e) => setForm(tenant.id, { google: { ...f.google, customer_id: e.target.value } })}
-                                placeholder="C0xxxxxx"
-                                style={inputStyle}
-                              />
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => handleSaveGoogle(tenant.id)}
-                            disabled={f.saving === 'google' || !f.google.service_account_json || !f.google.admin_email}
-                            style={saveButtonStyle(f.saving === 'google')}
-                          >
-                            {f.saving === 'google' ? 'Saving…' : 'Save Google Integration'}
-                          </button>
                         </div>
-                      )}
+                        <div>
+                          <label style={labelStyle}>Client Secret</label>
+                          <input
+                            type="password"
+                            value={f.m365.client_secret}
+                            onChange={(e) => setForm(tenant.id, { m365: { ...f.m365, client_secret: e.target.value } })}
+                            placeholder="••••••••••••••••"
+                            style={{ ...inputStyle, width: '100%' }}
+                          />
+                        </div>
+                        <button
+                          onClick={() => handleSaveM365(tenant.id)}
+                          disabled={f.saving || !f.m365.client_id || !f.m365.client_secret || !f.m365.tenant_id}
+                          style={saveButtonStyle(f.saving)}
+                        >
+                          {f.saving ? 'Saving…' : 'Save M365 Integration'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>

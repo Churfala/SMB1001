@@ -1,8 +1,10 @@
 import 'dotenv/config';
 import { Worker, Job } from 'bullmq';
 import { redis } from './config/redis';
+import { query, queryOne } from './config/database';
 import { processAuditJob } from './processors/audit.processor';
 import { startScheduler } from './processors/scheduler.processor';
+import { emailService } from './services/email.service';
 import { env } from './config/env';
 import pino from 'pino';
 
@@ -19,6 +21,30 @@ const auditWorker = new Worker('audit_run', processAuditJob, {
 
 auditWorker.on('completed', (job: Job, result: unknown) => {
   logger.info({ jobId: job.id, result }, 'Job completed');
+
+  // Fire-and-forget: send audit completion email to all active auditor+ users
+  const { auditId, tenantId } = job.data as { auditId: string; tenantId: string };
+  void (async () => {
+    try {
+      const [audit, tenant, users] = await Promise.all([
+        queryOne<{ name: string; score: number; summary: Record<string, unknown> }>(
+          'SELECT name, score, summary FROM audits WHERE id = $1', [auditId],
+        ),
+        queryOne<{ name: string }>('SELECT name FROM tenants WHERE id = $1', [tenantId]),
+        query<{ email: string }>(`SELECT email FROM users WHERE tenant_id = $1 AND is_active = true AND role != 'readonly'`, [tenantId]),
+      ]);
+      if (!audit || !tenant || users.length === 0) return;
+      await emailService.sendAuditComplete({
+        to: users.map((u) => u.email),
+        tenantName: tenant.name,
+        auditName: audit.name,
+        score: audit.score ?? 0,
+        tiers: ((audit.summary as Record<string, unknown>)?.tiers ?? {}) as Record<string, boolean>,
+      });
+    } catch (err) {
+      logger.error({ err: err instanceof Error ? err.message : err }, 'Failed to send post-audit email');
+    }
+  })();
 });
 
 auditWorker.on('failed', (job: Job | undefined, err: Error) => {

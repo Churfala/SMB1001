@@ -123,6 +123,18 @@ export const auditApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
+  downloadEvidence: async (tenantId: string, auditId: string, controlId: string, evidenceId: string, filename: string) => {
+    const res = await api.get(
+      `/tenants/${tenantId}/audits/${auditId}/results/${controlId}/evidence/${evidenceId}/download`,
+      { responseType: 'blob' },
+    );
+    const objectUrl = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  },
   listSchedules: (tenantId: string) =>
     api.get(`/tenants/${tenantId}/schedules`).then((r) => r.data),
   createSchedule: (tenantId: string, data: Record<string, unknown>) =>
@@ -162,6 +174,20 @@ export const assessmentApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then((r) => r.data);
   },
+  downloadEvidence: async (tenantId: string, controlId: string, evidenceId: string, filename: string) => {
+    const res = await api.get(
+      `/tenants/${tenantId}/assessments/${controlId}/evidence/${evidenceId}/download`,
+      { responseType: 'blob' },
+    );
+    const objectUrl = URL.createObjectURL(res.data as Blob);
+    const a = document.createElement('a');
+    a.href = objectUrl;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  },
+  overdueCount: (tenantId: string) =>
+    api.get(`/tenants/${tenantId}/assessments/overdue`).then((r) => r.data),
 };
 
 // Reports

@@ -1,7 +1,6 @@
 import { Job } from 'bullmq';
 import { query, queryOne } from '../config/database';
 import { m365Service, M365Data } from '../services/m365.service';
-import { googleService, GoogleData } from '../services/google.service';
 import { controlEvaluators, EvaluationResult, ResultStatus } from '../evaluators/control.evaluator';
 import pino from 'pino';
 
@@ -40,13 +39,9 @@ export async function processAuditJob(
   try {
     await job.updateProgress(5);
 
-    const [m365Row, googleRow] = await Promise.all([
-      queryOne<any>('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'm365', 'connected']),
-      queryOne<any>('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'google', 'connected']),
-    ]);
+    const m365Row = await queryOne<any>('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'm365', 'connected']);
 
     let m365Data: M365Data | null = null;
-    let googleData: GoogleData | null = null;
 
     if (m365Row) {
       try {
@@ -61,22 +56,7 @@ export async function processAuditJob(
       }
     }
 
-    await job.updateProgress(35);
-
-    if (googleRow) {
-      try {
-        logger.info({ auditId }, 'Collecting Google Workspace data');
-        googleData = await googleService.collectData(googleRow as any);
-        await query('UPDATE integrations SET last_sync = NOW(), status = $1, error_message = NULL WHERE id = $2', ['connected', (googleRow as any).id]);
-        logger.info({ auditId, users: googleData.users.length }, 'Google data collected');
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        logger.error({ err: msg, auditId }, 'Google data collection failed');
-        await query('UPDATE integrations SET status = $1, error_message = $2 WHERE id = $3', ['error', msg.slice(0, 500), (googleRow as any).id]);
-      }
-    }
-
-    await job.updateProgress(65);
+    await job.updateProgress(50);
 
     const controls = await query<ControlRow>('SELECT * FROM controls WHERE is_active = true ORDER BY control_id');
     logger.info({ auditId, controls: controls.length }, 'Evaluating controls');
@@ -90,7 +70,7 @@ export async function processAuditJob(
 
       if (evaluator) {
         try {
-          evalResult = evaluator(m365Data, googleData);
+          evalResult = evaluator(m365Data);
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Unknown error';
           logger.error({ err: msg, controlId: control.control_id }, 'Control evaluation error');
@@ -101,7 +81,7 @@ export async function processAuditJob(
       }
 
       results.push({ control_id: control.id, ...evalResult });
-      await job.updateProgress(65 + Math.round(((i + 1) / controls.length) * 25));
+      await job.updateProgress(50 + Math.round(((i + 1) / controls.length) * 40));
     }
 
     // Persist to audit_results

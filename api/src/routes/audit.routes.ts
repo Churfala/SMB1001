@@ -103,6 +103,14 @@ export async function auditRoutes(app: FastifyInstance) {
     auditController.uploadFileEvidence,
   );
 
+  app.get(
+    '/:tenantId/audits/:auditId/results/:controlId/evidence/:evidenceId/download',
+    {
+      preHandler: [validateTenantAccess] as any,
+    },
+    auditController.downloadEvidence,
+  );
+
   // ------------------------------------------------------------------
   // Run-now + weekly schedule
   // ------------------------------------------------------------------

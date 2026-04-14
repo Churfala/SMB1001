@@ -12,6 +12,13 @@ export async function assessmentRoutes(app: FastifyInstance) {
     assessmentController.list,
   );
 
+  // Must be registered before /:controlId routes to avoid "overdue" being treated as controlId
+  app.get(
+    '/:tenantId/assessments/overdue',
+    { preHandler: [validateTenantAccess] as any },
+    assessmentController.overdueCount,
+  );
+
   app.put(
     '/:tenantId/assessments/:controlId',
     { preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any },
@@ -34,5 +41,11 @@ export async function assessmentRoutes(app: FastifyInstance) {
     '/:tenantId/assessments/:controlId/evidence/file',
     { preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any },
     assessmentController.uploadFileEvidence,
+  );
+
+  app.get(
+    '/:tenantId/assessments/:controlId/evidence/:evidenceId/download',
+    { preHandler: [validateTenantAccess] as any },
+    assessmentController.downloadEvidence,
   );
 }

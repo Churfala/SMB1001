@@ -218,8 +218,8 @@ export const tenantController = {
       return reply.status(400).send({ error: 'Bad Request', message: 'type and client_id are required' });
     }
 
-    if (!['m365', 'google'].includes(type)) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'type must be m365 or google' });
+    if (type !== 'm365') {
+      return reply.status(400).send({ error: 'Bad Request', message: 'type must be m365' });
     }
 
     try {

@@ -123,18 +123,18 @@ export const auditService = {
   async finalise(auditId: string, tenantId: string): Promise<Audit> {
     const [results, controls] = await Promise.all([
       query<AuditResult>('SELECT * FROM audit_results WHERE audit_id = $1', [auditId]),
-      query<Control>('SELECT * FROM controls WHERE is_active = true'),
+      query<Control>('SELECT id, severity, tier FROM controls WHERE is_active = true'),
     ]);
 
     const controlMap = new Map(controls.map((c) => [c.id, c]));
     let totalWeight = 0;
     let earnedWeight = 0;
-    const summary: Record<string, number> = { pass: 0, fail: 0, partial: 0, not_applicable: 0, manual_review: 0 };
+    const summary: Record<string, unknown> = { pass: 0, fail: 0, partial: 0, not_applicable: 0, manual_review: 0 };
 
     for (const result of results) {
       const control = controlMap.get(result.control_id);
       const weight = SEVERITY_WEIGHTS[control?.severity ?? 'low'] ?? 1;
-      summary[result.status] = (summary[result.status] ?? 0) + 1;
+      (summary[result.status] as number) = ((summary[result.status] as number) ?? 0) + 1;
 
       if (result.status !== 'not_applicable' && result.status !== 'manual_review') {
         totalWeight += weight;
@@ -142,6 +142,15 @@ export const auditService = {
         else if (result.status === 'partial') earnedWeight += weight * 0.5;
       }
     }
+
+    // Compute tier achievement (cumulative: tier N achieved = all controls with tier <= N pass or N/A)
+    const tiers: Record<string, boolean> = {};
+    for (const maxTier of [1, 2, 3, 4, 5]) {
+      const tierResults = results.filter((r) => ((controlMap.get(r.control_id) as Control & { tier: number })?.tier ?? 99) <= maxTier);
+      tiers[maxTier] = tierResults.length > 0 &&
+        tierResults.every((r) => r.status === 'pass' || r.status === 'not_applicable');
+    }
+    summary.tiers = tiers;
 
     const score = totalWeight > 0 ? Math.round((earnedWeight / totalWeight) * 10000) / 100 : 0;
 

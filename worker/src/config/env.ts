@@ -13,4 +13,10 @@ export const env = {
   ENCRYPTION_KEY: process.env.ENCRYPTION_KEY || '0'.repeat(64),
   WORKER_CONCURRENCY: parseInt(process.env.WORKER_CONCURRENCY || '5', 10),
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+  SMTP_HOST: process.env.SMTP_HOST || '',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_SECURE: process.env.SMTP_SECURE === 'true',
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
+  SMTP_FROM: process.env.SMTP_FROM || 'ControlCheck <noreply@globaltechnology.nz>',
 } as const;

@@ -431,6 +431,9 @@ export default function AuditDetail() {
             onNotesSave={() => handleNotesSave(selectedResult.control_id, localNotes)}
             onEvidenceTextChange={(v) => setEvidenceText((t) => ({ ...t, [selectedResult.control_id]: v }))}
             onAddText={() => handleTextEvidence(selectedResult.control_id)}
+            onDownloadEvidence={(evidenceId, filename) =>
+              void auditApi.downloadEvidence(currentTenant!.id, auditId!, selectedResult.control_id, evidenceId, filename)
+            }
             fileInputRef={fileInputRef}
           />
         )}
@@ -467,13 +470,14 @@ interface DrawerProps {
   onNotesSave: () => void;
   onEvidenceTextChange: (v: string) => void;
   onAddText: () => void;
+  onDownloadEvidence: (evidenceId: string, filename: string) => void;
   fileInputRef: React.RefObject<HTMLInputElement>;
 }
 
 function DrawerContent({
   result, evidence, evidenceLoading, evidenceText, localNotes,
   canEdit, onClose, onStatusChange, onNotesChange, onNotesSave,
-  onEvidenceTextChange, onAddText, fileInputRef,
+  onEvidenceTextChange, onAddText, onDownloadEvidence, fileInputRef,
 }: DrawerProps) {
   const color = DOMAIN_COLORS[result.category] ?? '#2563eb';
   const ti = tierInfo(result.tier);
@@ -624,14 +628,22 @@ function DrawerContent({
                   <span style={{ fontSize: 16, flexShrink: 0 }}>{ev.type === 'file' ? '📎' : '📝'}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {ev.type === 'file' ? (
-                      <p style={{ fontSize: 13, margin: 0, fontWeight: 500, color: '#111827', wordBreak: 'break-all' }}>
-                        {ev.file_name}
+                      <button
+                        onClick={() => onDownloadEvidence(ev.id, ev.file_name ?? '')}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: 0, textAlign: 'left',
+                        }}
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#2563eb', wordBreak: 'break-all', textDecoration: 'underline' }}>
+                          {ev.file_name}
+                        </span>
                         {ev.file_size != null && (
                           <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>
                             ({Math.round(ev.file_size / 1024)}KB)
                           </span>
                         )}
-                      </p>
+                      </button>
                     ) : (
                       <p style={{ fontSize: 13, margin: 0, color: '#374151', lineHeight: 1.4 }}>{ev.content}</p>
                     )}

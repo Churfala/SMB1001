@@ -31,7 +31,7 @@ export interface Tenant {
 export interface Integration {
   id: string;
   tenant_id: string;
-  type: 'm365' | 'google';
+  type: 'm365';
   client_id: string | null;
   status: 'pending' | 'connected' | 'error' | 'revoked';
   scopes: string[];
@@ -118,6 +118,7 @@ export interface Audit {
     partial?: number;
     not_applicable?: number;
     manual_review?: number;
+    tiers?: Record<string, boolean>;
   };
   created_at: string;
   results?: AuditResult[];

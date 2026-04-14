@@ -247,6 +247,25 @@ export const auditController = {
     return reply.status(201).send(evidence);
   },
 
+  async downloadEvidence(request: FastifyRequest, reply: FastifyReply) {
+    const { auditId, evidenceId } = request.params as { auditId: string; evidenceId: string };
+
+    const ev = await queryOne<{ id: string; file_path: string; file_name: string; mime_type: string; type: string }>(
+      'SELECT id, file_path, file_name, mime_type, type FROM evidence WHERE id = $1 AND audit_id = $2',
+      [evidenceId, auditId],
+    );
+
+    if (!ev || ev.type !== 'file') return reply.status(404).send({ error: 'Not Found', message: 'Evidence file not found' });
+
+    const absPath = path.join(env.UPLOAD_DIR, ev.file_path);
+    if (!fs.existsSync(absPath)) return reply.status(404).send({ error: 'Not Found', message: 'File missing from storage' });
+
+    return reply
+      .header('Content-Disposition', `attachment; filename="${ev.file_name}"`)
+      .header('Content-Type', ev.mime_type || 'application/octet-stream')
+      .send(fs.createReadStream(absPath));
+  },
+
   // ------------------------------------------------------------------
   // Schedules
   // ------------------------------------------------------------------

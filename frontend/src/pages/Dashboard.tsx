@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auditApi, tenantApi } from '../services/api';
+import { auditApi, tenantApi, assessmentApi } from '../services/api';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
 import { StatusBadge } from '../components/StatusBadge';
 import type { Audit } from '../types';
+import { TIERS } from '../utils/tiers';
 
 const SCORE_COLOR = (s: number) => s >= 80 ? '#16a34a' : s >= 60 ? '#d97706' : '#dc2626';
 const STATUS_COLORS: Record<string, string> = {
@@ -29,6 +30,7 @@ export default function Dashboard() {
   const [weeklyNextRun, setWeeklyNextRun] = useState<string | null>(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [secureScore, setSecureScore] = useState<{ currentScore: number; maxScore: number; percentage: number; lastRefresh: string } | null>(null);
+  const [overdueCount, setOverdueCount] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const latestAudit = audits[0] ?? null;
@@ -76,6 +78,9 @@ export default function Dashboard() {
       tenantApi.getSecureScore(currentTenant.id)
         .then((d) => setSecureScore(d))
         .catch(() => {}),
+      assessmentApi.overdueCount(currentTenant.id)
+        .then((d) => setOverdueCount(d.count ?? 0))
+        .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [currentTenant?.id]);
 
@@ -105,7 +110,9 @@ export default function Dashboard() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Loading…</div>;
 
   const summary = latestAudit?.summary ?? {};
-  const summaryTotal = Object.values(summary).reduce((a, b) => a + (b as number), 0);
+  const summaryTotal = Object.entries(summary)
+    .filter(([k]) => k !== 'tiers')
+    .reduce((a, [, b]) => a + (typeof b === 'number' ? b : 0), 0);
   const canRun = user?.role !== 'readonly';
 
   return (
@@ -189,7 +196,7 @@ export default function Dashboard() {
                   })}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', marginTop: 10 }}>
-                  {Object.entries(summary).filter(([, v]) => (v as number) > 0).map(([key, val]) => (
+                  {Object.entries(summary).filter(([k, v]) => k !== 'tiers' && typeof v === 'number' && (v as number) > 0).map(([key, val]) => (
                     <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
                       <div style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: STATUS_COLORS[key] ?? '#e5e7eb' }} />
                       <span style={{ color: '#6b7280', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</span>
@@ -231,6 +238,57 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Certification Level ── */}
+      {latestAudit?.status === 'completed' && latestAudit.summary?.tiers && (
+        <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: 24, marginBottom: 20 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: '#374151', margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Certification Level
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {TIERS.map((t) => {
+              const achieved = (latestAudit.summary?.tiers as Record<string, boolean>)?.[String(t.tier)] ?? false;
+              return (
+                <span key={t.tier} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 600,
+                  border: `2px solid ${achieved ? t.color : '#e5e7eb'}`,
+                  backgroundColor: achieved ? t.bg : '#f9fafb',
+                  color: achieved ? t.color : '#9ca3af',
+                }}>
+                  {achieved ? '✓' : '○'} {t.tier === 3 ? `★ ${t.name}` : t.name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Overdue reviews warning ── */}
+      {overdueCount > 0 && (
+        <div
+          onClick={() => navigate('/controls')}
+          style={{
+            backgroundColor: '#fff1f0', borderRadius: 10,
+            border: '1px solid #fca5a5', padding: '14px 20px', marginBottom: 20,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            cursor: 'pointer',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 18 }}>⚠</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#991b1b' }}>
+                {overdueCount} control review{overdueCount !== 1 ? 's' : ''} overdue
+              </div>
+              <div style={{ fontSize: 12, color: '#dc2626', marginTop: 2 }}>
+                Click to view Controls and update review dates
+              </div>
+            </div>
+          </div>
+          <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 500 }}>View →</span>
         </div>
       )}
 

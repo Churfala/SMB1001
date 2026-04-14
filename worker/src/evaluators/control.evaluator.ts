@@ -1,5 +1,4 @@
 import type { M365Data } from '../services/m365.service';
-import type { GoogleData } from '../services/google.service';
 
 export type ResultStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'manual_review';
 
@@ -12,7 +11,6 @@ export interface EvaluationResult {
 
 export type EvaluatorFn = (
   m365Data: M365Data | null,
-  googleData: GoogleData | null,
 ) => EvaluationResult;
 
 const manual = (notes: string): EvaluationResult => ({
@@ -57,7 +55,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.2: Restrict Administrative Privileges
   // -------------------------------------------------------------------
-  ['2.2', (m365, google) => {
+  ['2.2', (m365) => {
     if (m365) {
       const adminIds = new Set<string>();
       for (const role of m365.adminRoles) {
@@ -81,19 +79,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
         notes: `${adminIds.size} admin users (${globalCount} Global Admins) out of ${total} active users. SMB1001 requires admin privileges limited to those who need them; Global Admin should be 3–5 maximum.`,
       };
     }
-    if (google) {
-      const ac = google.adminUsers.length;
-      const total = google.users.length;
-      const ratio = total > 0 ? ac / total : 0;
-      const status: ResultStatus = ratio <= 0.05 ? 'pass' : ratio <= 0.10 ? 'partial' : 'fail';
-      return {
-        status,
-        score: status === 'pass' ? 100 : status === 'partial' ? 60 : 20,
-        rawData: { adminCount: ac, totalUsers: total },
-        notes: `${ac} admin users out of ${total} total users (${Math.round(ratio * 100)}%). Target: ≤5% admin ratio.`,
-      };
-    }
-    return na('No M365 or Google Workspace integration available. Provide manual evidence of admin privilege restrictions.');
+    return na('No M365 integration available. Provide manual evidence of admin privilege restrictions.');
   }],
 
   // -------------------------------------------------------------------
@@ -109,7 +95,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.5: MFA on All Employee Email Accounts
   // -------------------------------------------------------------------
-  ['2.5', (m365, google) => {
+  ['2.5', (m365) => {
     if (m365) {
       const active = m365.users.filter((u) => u.accountEnabled);
       if (active.length === 0) return na('No active users found in M365 directory');
@@ -125,25 +111,13 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
         notes: `${withMFA}/${active.length} active M365 users have MFA enrolled (${pct}%). SMB1001 requires MFA on all employee email accounts including administrators.`,
       };
     }
-    if (google) {
-      const active = google.users.filter((u) => !u.suspended);
-      if (active.length === 0) return na('No active users found in Google Workspace');
-      const withMFA = active.filter((u) => u.isEnrolledIn2Sv).length;
-      const pct = Math.round((withMFA / active.length) * 100);
-      return {
-        status: pct >= 98 ? 'pass' : pct >= 85 ? 'partial' : 'fail',
-        score: pct,
-        rawData: { totalUsers: active.length, withMFA },
-        notes: `${withMFA}/${active.length} active Google Workspace users have 2-Step Verification enrolled (${pct}%).`,
-      };
-    }
-    return na('No M365 or Google Workspace integration available. Provide manual evidence of MFA enforcement on all email accounts.');
+    return na('No M365 integration available. Provide manual evidence of MFA enforcement on all email accounts.');
   }],
 
   // -------------------------------------------------------------------
   // 2.6: MFA on All Business Applications
   // -------------------------------------------------------------------
-  ['2.6', (m365, google) => {
+  ['2.6', (m365) => {
     if (m365) {
       // Check Security Defaults (covers all users and all apps)
       const sd = m365.legacyAuthPolicies[0];
@@ -190,17 +164,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
           : 'No Conditional Access policy requiring MFA for all users found, and Security Defaults are not enabled. Enable Security Defaults or create CA policies to enforce MFA across all business applications.',
       };
     }
-    if (google) {
-      return {
-        status: google.twoSVEnforced ? 'pass' : 'fail',
-        score: google.twoSVEnforced ? 100 : 0,
-        rawData: { twoSVEnforced: google.twoSVEnforced },
-        notes: google.twoSVEnforced
-          ? '2-Step Verification is enforced organisation-wide in Google Workspace.'
-          : '2-Step Verification is NOT enforced. Enable enforcement in Admin Console > Security > 2-Step Verification.',
-      };
-    }
-    return na('No M365 or Google Workspace integration available. Provide manual evidence of MFA enforcement across all business applications.');
+    return na('No M365 integration available. Provide manual evidence of MFA enforcement across all business applications.');
   }],
 
   // -------------------------------------------------------------------
@@ -216,7 +180,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.9: MFA Where Important Data Is Stored
   // -------------------------------------------------------------------
-  ['2.9', (m365, google) => {
+  ['2.9', (m365) => {
     if (m365) {
       const sd = m365.legacyAuthPolicies[0];
       if (sd?.isEnabled) {
@@ -242,17 +206,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
           : 'No Conditional Access or device compliance policies found protecting cloud data storage. Enable Security Defaults or create CA policies requiring MFA for all cloud app access.',
       };
     }
-    if (google) {
-      return {
-        status: google.twoSVEnforced ? 'pass' : 'fail',
-        score: google.twoSVEnforced ? 100 : 0,
-        rawData: { twoSVEnforced: google.twoSVEnforced },
-        notes: google.twoSVEnforced
-          ? '2-Step Verification enforcement covers access to Google Drive, Gmail, and all Workspace data storage.'
-          : '2-Step Verification is NOT enforced, leaving cloud-hosted data storage unprotected by MFA.',
-      };
-    }
-    return na('No M365 or Google Workspace integration available. Provide manual evidence of MFA on all systems storing important digital data.');
+    return na('No M365 integration available. Provide manual evidence of MFA on all systems storing important digital data.');
   }],
 
   // -------------------------------------------------------------------

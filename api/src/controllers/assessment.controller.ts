@@ -85,6 +85,16 @@ export const assessmentController = {
     return reply.send(row);
   },
 
+  // GET /tenants/:tenantId/assessments/overdue
+  async overdueCount(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId } = request.params as { tenantId: string };
+    const row = await queryOne<{ count: number }>(
+      `SELECT COUNT(*)::int AS count FROM control_assessments WHERE tenant_id = $1 AND review_date < CURRENT_DATE`,
+      [tenantId],
+    );
+    return reply.send({ count: row?.count ?? 0 });
+  },
+
   // GET /tenants/:tenantId/assessments/:controlId/evidence
   async listEvidence(request: FastifyRequest, reply: FastifyReply) {
     const { tenantId, controlId } = request.params as { tenantId: string; controlId: string };
@@ -154,6 +164,26 @@ export const assessmentController = {
     );
 
     return reply.status(201).send(evidence);
+  },
+
+  // GET /tenants/:tenantId/assessments/:controlId/evidence/:evidenceId/download
+  async downloadEvidence(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId, evidenceId } = request.params as { tenantId: string; evidenceId: string };
+
+    const ev = await queryOne<{ id: string; file_path: string; file_name: string; mime_type: string; type: string }>(
+      'SELECT id, file_path, file_name, mime_type, type FROM assessment_evidence WHERE id = $1 AND tenant_id = $2',
+      [evidenceId, tenantId],
+    );
+
+    if (!ev || ev.type !== 'file') return reply.status(404).send({ error: 'Not Found', message: 'Evidence file not found' });
+
+    const absPath = path.join(env.UPLOAD_DIR, ev.file_path);
+    if (!fs.existsSync(absPath)) return reply.status(404).send({ error: 'Not Found', message: 'File missing from storage' });
+
+    return reply
+      .header('Content-Disposition', `attachment; filename="${ev.file_name}"`)
+      .header('Content-Type', ev.mime_type || 'application/octet-stream')
+      .send(fs.createReadStream(absPath));
   },
 
   // POST /tenants/:tenantId/assessments/:controlId/evidence/file

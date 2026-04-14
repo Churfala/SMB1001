@@ -1,8 +1,8 @@
 export type UserRole = 'admin' | 'auditor' | 'readonly';
-export type IntegrationType = 'm365' | 'google';
+export type IntegrationType = 'm365';
 export type ControlSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type ValidationType = 'automated' | 'manual' | 'hybrid';
-export type IntegrationScopeType = 'm365' | 'google' | 'both' | 'none';
+export type IntegrationScopeType = 'm365' | 'none';
 export type AuditStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 export type ResultStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'manual_review';
 export type EvidenceType = 'text' | 'file';

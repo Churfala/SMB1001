@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
+import { assessmentApi } from '../services/api';
 import type { Tenant } from '../types';
 
 export default function Layout() {
@@ -9,13 +10,21 @@ export default function Layout() {
   const { tenants, currentTenant, setCurrentTenant } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
+  const [overdueCount, setOverdueCount] = useState(0);
+
+  useEffect(() => {
+    if (!currentTenant) return;
+    assessmentApi.overdueCount(currentTenant.id)
+      .then((d) => setOverdueCount(d.count ?? 0))
+      .catch(() => {});
+  }, [currentTenant?.id]);
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const navLink = (to: string, label: string) => (
+  const navLink = (to: string, label: string, badge?: number) => (
     <Link
       to={to}
       style={{
@@ -23,9 +32,21 @@ export default function Layout() {
         textDecoration: 'none',
         fontWeight: location.pathname.startsWith(to) ? 600 : 400,
         fontSize: 14,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 5,
       }}
     >
       {label}
+      {badge != null && badge > 0 && (
+        <span style={{
+          backgroundColor: '#dc2626', color: '#fff',
+          borderRadius: 10, fontSize: 10, fontWeight: 700,
+          padding: '1px 5px', lineHeight: '14px',
+        }}>
+          {badge}
+        </span>
+      )}
     </Link>
   );
 
@@ -50,7 +71,7 @@ export default function Layout() {
           </span>
           <div style={{ display: 'flex', gap: 24 }}>
             {navLink('/dashboard', 'Dashboard')}
-            {navLink('/controls', 'Controls')}
+            {navLink('/controls', 'Controls', overdueCount > 0 ? overdueCount : undefined)}
             {user?.role === 'admin' && navLink('/tenants', 'Tenants')}
             {navLink('/settings', 'Settings')}
           </div>
