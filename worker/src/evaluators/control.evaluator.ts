@@ -39,18 +39,25 @@ function hasMfa(methods: Record<string, unknown>[]): boolean {
 
 export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
-  // GOVERN – manual controls
+  // DOMAIN 1: TECHNOLOGY MANAGEMENT — all manual
   // -------------------------------------------------------------------
-  ['GOV-001', () => manual('Security policy documentation requires manual review')],
-  ['GOV-002', () => manual('Risk assessment requires manual review')],
-  ['GOV-003', () => manual('Security roles documentation requires manual review')],
-  ['GOV-004', () => manual('Security awareness training records require manual review')],
-  ['GOV-005', () => manual('Incident response plan requires manual review')],
+  ['1.1', () => manual('Provide evidence of IT/MSP support specialist engagement: service contract or SLA. For Level 4+, confirm the SLA includes an 8-working-hour incident response commitment.')],
+  ['1.2', () => manual('Provide firewall configuration report or IT provider attestation confirming the firewall is configured securely, default passwords changed, and unnecessary ports closed.')],
+  ['1.3', () => manual('Provide antivirus/anti-malware deployment evidence: management console report showing coverage across all endpoints, protection status, and last update dates.')],
+  ['1.4', () => manual('Provide evidence of automatic update configuration across all devices: patch management console reports showing OS and application patch compliance.')],
+  ['1.5', () => manual('Provide a list of all public-facing websites and SSL checker results (e.g., SSL Labs A rating) confirming valid TLS certificates on each domain.')],
+  ['1.6', () => manual('Provide server patching documentation: patch management policy and recent patch reports confirming critical patches applied within 14 days and full cycle within 6 months.')],
+  ['1.7', () => manual('Provide vulnerability scan reports for all internet-facing resources from the last 90 days. Include findings summary, risk ratings, and remediation status.')],
+  ['1.8', () => manual('Provide evidence of encryption at rest: BitLocker/FileVault activation reports for endpoints, cloud storage encryption configuration screenshots, and database encryption settings.')],
+  ['1.9', () => manual('Provide evidence of application control implementation: AppLocker/WDAC policy exports or MDM application control policy configuration, and approved application list.')],
+  ['1.10', () => manual('Provide evidence of macro security settings: Group Policy or Intune policy screenshots confirming untrusted Microsoft Office macros are disabled across all devices.')],
+  ['1.11', () => manual('Provide penetration test report from a qualified external provider dated within the last 12 months, covering external network, web applications, and social engineering components.')],
+  ['1.12', () => manual('Provide EDR deployment evidence: management console screenshots showing coverage across all endpoints. For Level 5, provide the MDR service agreement with SLA response times.')],
 
   // -------------------------------------------------------------------
-  // IAM-001: MFA for admin accounts
+  // 2.2: Restrict Administrative Privileges
   // -------------------------------------------------------------------
-  ['IAM-001', (m365, google) => {
+  ['2.2', (m365, google) => {
     if (m365) {
       const adminIds = new Set<string>();
       for (const role of m365.adminRoles) {
@@ -58,89 +65,20 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
           adminIds.add(String(member.id));
         }
       }
-      if (adminIds.size === 0) return na('No admin users found in directory roles');
-
-      let withMFA = 0;
-      for (const id of adminIds) {
-        if (hasMfa(m365.mfaMethods.get(id) ?? [])) withMFA++;
-      }
-      const pct = Math.round((withMFA / adminIds.size) * 100);
-      return {
-        status: pct === 100 ? 'pass' : pct >= 80 ? 'partial' : 'fail',
-        score: pct,
-        rawData: { totalAdmins: adminIds.size, withMFA },
-        notes: `${withMFA}/${adminIds.size} admin accounts have MFA enrolled`,
-      };
-    }
-    if (google) {
-      const admins = google.adminUsers;
-      if (admins.length === 0) return na('No admin users found');
-      const withMFA = admins.filter((u) => u.isEnrolledIn2Sv).length;
-      const pct = Math.round((withMFA / admins.length) * 100);
-      return {
-        status: pct === 100 ? 'pass' : pct >= 80 ? 'partial' : 'fail',
-        score: pct,
-        rawData: { totalAdmins: admins.length, withMFA },
-        notes: `${withMFA}/${admins.length} admin accounts have 2FA enrolled`,
-      };
-    }
-    return na('No integration data available');
-  }],
-
-  // -------------------------------------------------------------------
-  // IAM-002: MFA for all users
-  // -------------------------------------------------------------------
-  ['IAM-002', (m365, google) => {
-    if (m365) {
-      const active = m365.users.filter((u) => u.accountEnabled);
-      if (active.length === 0) return na('No active users found');
-      let withMFA = 0;
-      for (const u of active) {
-        if (hasMfa(m365.mfaMethods.get(String(u.id)) ?? [])) withMFA++;
-      }
-      const pct = Math.round((withMFA / active.length) * 100);
-      return {
-        status: pct >= 98 ? 'pass' : pct >= 85 ? 'partial' : 'fail',
-        score: pct,
-        rawData: { totalUsers: active.length, withMFA },
-        notes: `${withMFA}/${active.length} active users have MFA enrolled (${pct}%)`,
-      };
-    }
-    if (google) {
-      const active = google.users.filter((u) => !u.suspended);
-      if (active.length === 0) return na('No active users found');
-      const withMFA = active.filter((u) => u.isEnrolledIn2Sv).length;
-      const pct = Math.round((withMFA / active.length) * 100);
-      return {
-        status: pct >= 98 ? 'pass' : pct >= 85 ? 'partial' : 'fail',
-        score: pct,
-        rawData: { totalUsers: active.length, withMFA },
-        notes: `${withMFA}/${active.length} users have 2FA enrolled`,
-      };
-    }
-    return na('No integration data available');
-  }],
-
-  // -------------------------------------------------------------------
-  // IAM-003: Privileged access restricted
-  // -------------------------------------------------------------------
-  ['IAM-003', (m365, google) => {
-    if (m365) {
-      const adminIds = new Set<string>();
-      for (const role of m365.adminRoles) {
-        for (const m of (role.members as Record<string, unknown>[] ?? [])) adminIds.add(String(m.id));
-      }
       const total = m365.users.filter((u) => u.accountEnabled).length;
       const globalAdmin = m365.adminRoles.find((r) => r.displayName === 'Global Administrator');
       const globalCount = (globalAdmin?.members as unknown[] ?? []).length;
       const ratio = total > 0 ? adminIds.size / total : 0;
-      const status: ResultStatus = globalCount <= 3 && ratio <= 0.05 ? 'pass'
-        : globalCount <= 5 && ratio <= 0.10 ? 'partial' : 'fail';
+
+      const status: ResultStatus =
+        globalCount <= 3 && ratio <= 0.05 ? 'pass'
+        : globalCount <= 5 && ratio <= 0.10 ? 'partial'
+        : 'fail';
       return {
         status,
         score: status === 'pass' ? 100 : status === 'partial' ? 60 : 20,
         rawData: { totalUsers: total, adminCount: adminIds.size, globalAdminCount: globalCount },
-        notes: `${adminIds.size} total admins (${globalCount} Global Admins) out of ${total} users`,
+        notes: `${adminIds.size} admin users (${globalCount} Global Admins) out of ${total} active users. SMB1001 requires admin privileges limited to those who need them; Global Admin should be 3–5 maximum.`,
       };
     }
     if (google) {
@@ -152,188 +90,234 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
         status,
         score: status === 'pass' ? 100 : status === 'partial' ? 60 : 20,
         rawData: { adminCount: ac, totalUsers: total },
-        notes: `${ac} admin users out of ${total} total users`,
+        notes: `${ac} admin users out of ${total} total users (${Math.round(ratio * 100)}%). Target: ≤5% admin ratio.`,
       };
     }
-    return na('No integration data');
+    return na('No M365 or Google Workspace integration available. Provide manual evidence of admin privilege restrictions.');
   }],
 
   // -------------------------------------------------------------------
-  // IAM-004: Password policy
+  // 2.3: Individual User Accounts — manual (can't reliably detect shared accounts via API)
   // -------------------------------------------------------------------
-  ['IAM-004', (m365) => {
-    if (!m365) return na('No M365 integration data');
-    const sd = m365.legacyAuthPolicies[0];
-    if (sd?.isEnabled) return { status: 'pass', score: 100, rawData: sd, notes: 'Security Defaults enforce password policies' };
-    const mfaCA = m365.conditionalAccessPolicies.filter(
-      (p) => p.state === 'enabled' && Array.isArray((p.grantControls as Record<string, unknown>)?.builtInControls) &&
-        ((p.grantControls as Record<string, string[]>).builtInControls).includes('mfa'),
-    );
-    if (mfaCA.length > 0) return { status: 'partial', score: 70, rawData: { caPolicies: mfaCA.length }, notes: 'CA MFA policies partially address password requirements' };
-    return manual('Password policy configuration requires manual verification in Entra ID');
-  }],
+  ['2.3', () => manual('Provide evidence that all system access uses individual named accounts: user account listing from your directory and confirmation no shared/generic credentials are in use.')],
 
   // -------------------------------------------------------------------
-  // IAM-005: Legacy authentication blocked
+  // 2.4: Password Manager — manual
   // -------------------------------------------------------------------
-  ['IAM-005', (m365) => {
-    if (!m365) return na('No M365 integration');
-    const sd = m365.legacyAuthPolicies[0];
-    if (sd?.isEnabled) return { status: 'pass', score: 100, rawData: sd, notes: 'Security Defaults block legacy authentication' };
-    const blocked = m365.conditionalAccessPolicies.filter((p) => {
-      const ct = (p.conditions as Record<string, unknown>)?.clientAppTypes as string[] ?? [];
-      const bc = ((p.grantControls as Record<string, unknown>)?.builtInControls as string[] ?? []);
-      return p.state === 'enabled' && (ct.includes('exchangeActiveSync') || ct.includes('other')) && bc.includes('block');
-    });
-    if (blocked.length > 0) return { status: 'pass', score: 100, rawData: { policies: blocked.length }, notes: 'Conditional Access blocks legacy authentication' };
-    return { status: 'fail', score: 0, rawData: { securityDefaults: false, caPolicy: false }, notes: 'Legacy authentication is NOT blocked. Enable Security Defaults or a CA block policy.' };
-  }],
+  ['2.4', () => manual('Provide evidence of password manager deployment: management console screenshots showing enrolled users, MFA enforcement on the vault, and audit logging configuration.')],
 
   // -------------------------------------------------------------------
-  // IAM-006: Google 2SV enforcement
+  // 2.5: MFA on All Employee Email Accounts
   // -------------------------------------------------------------------
-  ['IAM-006', (_m365, google) => {
-    if (!google) return na('No Google Workspace integration');
-    return {
-      status: google.twoSVEnforced ? 'pass' : 'fail',
-      score: google.twoSVEnforced ? 100 : 0,
-      rawData: { twoSVEnforced: google.twoSVEnforced },
-      notes: google.twoSVEnforced
-        ? '2-Step Verification is enforced for the organisation'
-        : '2SV is not enforced. Enable in Admin Console > Security > 2-Step Verification.',
-    };
-  }],
-
-  // -------------------------------------------------------------------
-  // EMAIL controls
-  // -------------------------------------------------------------------
-  ['EMAIL-001', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (m365.antiPhishingPolicies.length === 0) return { status: 'fail', score: 0, rawData: {}, notes: 'No anti-phishing policies found. Configure Defender for Office 365.' };
-    const enabled = m365.antiPhishingPolicies.filter((p) => p.enabled !== false).length;
-    return { status: enabled > 0 ? 'pass' : 'fail', score: enabled > 0 ? 100 : 0, rawData: { total: m365.antiPhishingPolicies.length, enabled }, notes: `${enabled}/${m365.antiPhishingPolicies.length} anti-phishing policies enabled` };
-  }],
-
-  ['EMAIL-002', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (m365.safeAttachmentPolicies.length === 0) return manual('Safe Attachments config requires verification in Microsoft Defender portal. Requires Defender for Office 365 Plan 1.');
-    const enabled = m365.safeAttachmentPolicies.filter((p) => p.enable !== false && p.action !== 'Off').length;
-    return { status: enabled > 0 ? 'pass' : 'fail', score: enabled > 0 ? 100 : 0, rawData: { count: enabled }, notes: `${enabled} Safe Attachments policies enabled` };
-  }],
-
-  ['EMAIL-003', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (m365.safeLinksPolices.length === 0) return manual('Safe Links config requires verification in Microsoft Defender portal. Requires Defender for Office 365 Plan 1.');
-    const enabled = m365.safeLinksPolices.filter((p) => p.enable !== false).length;
-    return { status: enabled > 0 ? 'pass' : 'fail', score: enabled > 0 ? 100 : 0, rawData: { count: enabled }, notes: `${enabled} Safe Links policies enabled` };
-  }],
-
-  ['EMAIL-004', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (m365.dkimSettings.length === 0) return manual('DKIM settings could not be retrieved. Verify in Exchange admin centre or Microsoft Defender portal.');
-    const enabled = m365.dkimSettings.filter((d) => d.enabled).length;
-    const pct = Math.round((enabled / m365.dkimSettings.length) * 100);
-    return { status: pct === 100 ? 'pass' : pct > 0 ? 'partial' : 'fail', score: pct, rawData: { total: m365.dkimSettings.length, enabled }, notes: `DKIM enabled for ${enabled}/${m365.dkimSettings.length} domains` };
-  }],
-
-  ['EMAIL-005', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (m365.dmarcRecords.length === 0) return manual('DMARC cannot be verified automatically via Graph API. Check DNS TXT records for _dmarc subdomain on each accepted domain.');
-    const enforced = m365.dmarcRecords.filter((d) => d.policy === 'reject' || d.policy === 'quarantine').length;
-    const pct = Math.round((enforced / m365.dmarcRecords.length) * 100);
-    return { status: pct === 100 ? 'pass' : pct > 0 ? 'partial' : 'fail', score: pct, rawData: { total: m365.dmarcRecords.length, enforced }, notes: `DMARC policy enforced for ${enforced}/${m365.dmarcRecords.length} domains` };
-  }],
-
-  ['EMAIL-006', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (m365.mailboxAuditSettings.length === 0) return manual('Mailbox audit settings require verification in Exchange admin centre. Run: Get-OrganizationConfig | Select AuditDisabled');
-    const audited = m365.mailboxAuditSettings.filter((s) => s.auditEnabled !== false).length;
-    const pct = Math.round((audited / m365.mailboxAuditSettings.length) * 100);
-    return { status: pct === 100 ? 'pass' : pct > 0 ? 'partial' : 'fail', score: pct, rawData: { total: m365.mailboxAuditSettings.length, audited }, notes: `Mailbox auditing enabled for ${audited}/${m365.mailboxAuditSettings.length} mailboxes` };
-  }],
-
-  // -------------------------------------------------------------------
-  // CA controls
-  // -------------------------------------------------------------------
-  ['CA-001', (m365) => {
-    if (!m365) return na('No M365 integration');
-    const sd = m365.legacyAuthPolicies[0];
-    if (sd?.isEnabled) return { status: 'pass', score: 100, rawData: sd, notes: 'Security Defaults enforce MFA for all users' };
-    const mfaCA = m365.conditionalAccessPolicies.filter((p) =>
-      p.state === 'enabled' &&
-      ((p.grantControls as Record<string, string[]>)?.builtInControls ?? []).includes('mfa') &&
-      ((p.conditions as Record<string, Record<string, string[]>>)?.users?.includeUsers ?? []).includes('All'),
-    );
-    return { status: mfaCA.length > 0 ? 'pass' : 'fail', score: mfaCA.length > 0 ? 100 : 0, rawData: { mfaPolicies: mfaCA.length }, notes: `${mfaCA.length} CA policies require MFA for all users` };
-  }],
-
-  ['CA-002', (m365) => {
-    if (!m365) return na('No M365 integration');
-    const risk = m365.signInRiskPolicies.filter((p) =>
-      p.state === 'enabled' && ((p.conditions as Record<string, string[]>)?.signInRiskLevels ?? []).some((l: string) => l === 'high' || l === 'medium'),
-    );
-    return { status: risk.length > 0 ? 'pass' : 'fail', score: risk.length > 0 ? 100 : 0, rawData: { policies: risk.length }, notes: risk.length > 0 ? 'High-risk sign-in policies configured' : 'No high-risk sign-in policies. Requires Entra ID P2.' };
-  }],
-
-  ['CA-003', (m365) => {
-    if (!m365) return na('No M365 integration');
-    const comp = m365.deviceCompliancePolicies.filter((p) => p.state === 'enabled');
-    return { status: comp.length > 0 ? 'pass' : 'fail', score: comp.length > 0 ? 100 : 0, rawData: { policies: comp.length }, notes: comp.length > 0 ? 'Device compliance required by CA policies' : 'No CA policies requiring device compliance. Configure Intune.' };
-  }],
-
-  // -------------------------------------------------------------------
-  // DATA controls
-  // -------------------------------------------------------------------
-  ['DATA-001', (m365, google) => {
+  ['2.5', (m365, google) => {
     if (m365) {
-      if (m365.sharingPolicies.length === 0) return manual('SharePoint sharing settings could not be retrieved. Verify in SharePoint admin centre.');
-      const restricted = m365.sharingPolicies.some((p) => p.sharingCapability === 'Disabled' || p.sharingCapability === 'ExternalUserSharingOnly');
-      return { status: restricted ? 'pass' : 'partial', score: restricted ? 100 : 50, rawData: { sharingPolicies: m365.sharingPolicies }, notes: restricted ? 'External sharing restricted' : 'External sharing may allow anonymous access. Review SharePoint sharing settings.' };
+      const active = m365.users.filter((u) => u.accountEnabled);
+      if (active.length === 0) return na('No active users found in M365 directory');
+      let withMFA = 0;
+      for (const u of active) {
+        if (hasMfa(m365.mfaMethods.get(String(u.id)) ?? [])) withMFA++;
+      }
+      const pct = Math.round((withMFA / active.length) * 100);
+      return {
+        status: pct >= 98 ? 'pass' : pct >= 85 ? 'partial' : 'fail',
+        score: pct,
+        rawData: { totalUsers: active.length, withMFA },
+        notes: `${withMFA}/${active.length} active M365 users have MFA enrolled (${pct}%). SMB1001 requires MFA on all employee email accounts including administrators.`,
+      };
     }
     if (google) {
-      if (google.sharingSettings.length === 0) return manual('Google sharing settings could not be retrieved. Verify in Admin Console > Drive.');
-      const restricted = google.sharingSettings.some((s) => s.sharingPolicy === 'ALLOWED_FOR_DOMAIN' || s.sharingPolicy === 'NOT_ALLOWED');
-      return { status: restricted ? 'pass' : 'fail', score: restricted ? 100 : 30, rawData: { sharingSettings: google.sharingSettings }, notes: restricted ? 'Sharing restricted to trusted domains' : 'External sharing not restricted. Review Drive settings.' };
+      const active = google.users.filter((u) => !u.suspended);
+      if (active.length === 0) return na('No active users found in Google Workspace');
+      const withMFA = active.filter((u) => u.isEnrolledIn2Sv).length;
+      const pct = Math.round((withMFA / active.length) * 100);
+      return {
+        status: pct >= 98 ? 'pass' : pct >= 85 ? 'partial' : 'fail',
+        score: pct,
+        rawData: { totalUsers: active.length, withMFA },
+        notes: `${withMFA}/${active.length} active Google Workspace users have 2-Step Verification enrolled (${pct}%).`,
+      };
     }
-    return na('No integration data');
-  }],
-
-  ['DATA-002', () => manual('DLP policy configuration requires manual review in Microsoft Purview Compliance Center or Google Workspace DLP settings')],
-
-  ['DATA-003', (m365, google) => {
-    const apps = m365?.oauthApps ?? google?.oauthApps ?? [];
-    return { status: 'manual_review', score: 0, rawData: { totalApps: apps.length }, notes: `${apps.length} third-party OAuth applications detected. Review permissions and revoke unnecessary access.` };
+    return na('No M365 or Google Workspace integration available. Provide manual evidence of MFA enforcement on all email accounts.');
   }],
 
   // -------------------------------------------------------------------
-  // DET controls
+  // 2.6: MFA on All Business Applications
   // -------------------------------------------------------------------
-  ['DET-001', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (!m365.secureScore) return manual('Could not retrieve Secure Score. Requires SecurityEvents.Read.All permission.');
-    const current = Number(m365.secureScore.currentScore ?? 0);
-    const max = Number(m365.secureScore.maxScore ?? 1);
-    const pct = max > 0 ? Math.round((current / max) * 100) : 0;
-    return { status: pct >= 70 ? 'pass' : pct >= 50 ? 'partial' : 'fail', score: pct, rawData: { currentScore: current, maxScore: max }, notes: `Microsoft Secure Score: ${current}/${max} (${pct}%)` };
+  ['2.6', (m365, google) => {
+    if (m365) {
+      // Check Security Defaults (covers all users and all apps)
+      const sd = m365.legacyAuthPolicies[0];
+      if (sd?.isEnabled) {
+        return {
+          status: 'pass', score: 100, rawData: sd,
+          notes: 'Microsoft Security Defaults are enabled, enforcing MFA for all users across all Microsoft 365 apps and blocking legacy authentication.',
+        };
+      }
+      // Check for a CA policy requiring MFA for all users / all cloud apps
+      // Accepts: state=enabled (full credit) or state=enabledForReportingButNotEnforced (partial credit)
+      // For user scope: includeUsers contains 'All' OR includeUsers is empty (some tenants omit it when targeting all)
+      const targetsAllUsers = (p: Record<string, unknown>) => {
+        const users = (p.conditions as Record<string, Record<string, string[]>>)?.users ?? {};
+        const inc = users.includeUsers ?? [];
+        return inc.includes('All') || inc.length === 0;
+      };
+      const mfaForAll = m365.conditionalAccessPolicies.filter((p) =>
+        (p.state === 'enabled' || p.state === 'enabledForReportingButNotEnforced') &&
+        ((p.grantControls as Record<string, string[]>)?.builtInControls ?? []).includes('mfa') &&
+        targetsAllUsers(p as Record<string, unknown>),
+      );
+      const mfaEnabled = mfaForAll.filter((p) => p.state === 'enabled');
+      // Check for legacy auth block
+      const legacyBlocked = m365.conditionalAccessPolicies.filter((p) => {
+        const ct = (p.conditions as Record<string, unknown>)?.clientAppTypes as string[] ?? [];
+        const bc = ((p.grantControls as Record<string, unknown>)?.builtInControls as string[] ?? []);
+        return p.state === 'enabled' && (ct.includes('exchangeActiveSync') || ct.includes('other') || ct.includes('mobileAppsAndDesktopClients')) && bc.includes('block');
+      });
+      const hasMfaPolicy = mfaForAll.length > 0;
+      const hasMfaEnforced = mfaEnabled.length > 0;
+      const hasLegacyBlock = legacyBlocked.length > 0;
+      const status: ResultStatus = hasMfaEnforced && hasLegacyBlock ? 'pass'
+        : hasMfaEnforced ? 'partial'
+        : hasMfaPolicy ? 'partial'   // report-only mode: some credit
+        : 'fail';
+      const score = status === 'pass' ? 100 : hasMfaEnforced ? 60 : hasMfaPolicy ? 40 : 0;
+      return {
+        status,
+        score,
+        rawData: { mfaPolicies: mfaForAll.length, mfaEnforcedPolicies: mfaEnabled.length, legacyBlockPolicies: legacyBlocked.length },
+        notes: hasMfaPolicy
+          ? `${mfaForAll.length} Conditional Access policy/policies require MFA for all users${mfaEnabled.length < mfaForAll.length ? ' (some in report-only mode)' : ''}. ${hasLegacyBlock ? 'Legacy authentication is also blocked.' : 'Legacy authentication is NOT blocked — recommend adding a CA block policy for exchangeActiveSync and other legacy clients.'}`
+          : 'No Conditional Access policy requiring MFA for all users found, and Security Defaults are not enabled. Enable Security Defaults or create CA policies to enforce MFA across all business applications.',
+      };
+    }
+    if (google) {
+      return {
+        status: google.twoSVEnforced ? 'pass' : 'fail',
+        score: google.twoSVEnforced ? 100 : 0,
+        rawData: { twoSVEnforced: google.twoSVEnforced },
+        notes: google.twoSVEnforced
+          ? '2-Step Verification is enforced organisation-wide in Google Workspace.'
+          : '2-Step Verification is NOT enforced. Enable enforcement in Admin Console > Security > 2-Step Verification.',
+      };
+    }
+    return na('No M365 or Google Workspace integration available. Provide manual evidence of MFA enforcement across all business applications.');
   }],
 
-  ['DET-002', (m365) => {
-    if (!m365) return na('No M365 integration');
-    if (!m365.auditLogConfig) return manual('Audit log retention requires manual verification in Microsoft Purview Compliance Center');
-    const cfg = m365.auditLogConfig;
-    if (cfg.enabled === null) return manual(`Audit log status could not be confirmed: ${String(cfg.error ?? 'insufficient permissions')}`);
-    return { status: cfg.enabled ? 'pass' : 'fail', score: cfg.enabled ? 100 : 0, rawData: cfg, notes: cfg.enabled ? 'Unified audit log is enabled' : 'Unified audit log is NOT enabled. Enable in Microsoft Purview > Audit.' };
-  }],
+  // -------------------------------------------------------------------
+  // 2.7: RDP over VPN — manual
+  // -------------------------------------------------------------------
+  ['2.7', () => manual('Provide evidence that direct RDP (port 3389) is blocked at the firewall and all RDP access routes through VPN or RD Gateway. Include firewall rule screenshots or network topology diagram. Mark as not applicable if RDP is not used.')],
 
-  ['DET-003', (m365) => {
-    if (!m365) return na('No M365 integration');
-    const crit = m365.alertPolicies.filter((p) => p.severity === 'High' || p.severity === 'Medium' || p.severity === 'high' || p.severity === 'medium' || p.category === 'ThreatManagement');
-    return { status: crit.length >= 3 ? 'pass' : crit.length > 0 ? 'partial' : 'fail', score: crit.length >= 3 ? 100 : crit.length > 0 ? 50 : 0, rawData: { total: m365.alertPolicies.length, critical: crit.length }, notes: `${crit.length} critical/high severity alert policies configured` };
+  // -------------------------------------------------------------------
+  // 2.8: Cloud Credential and IAM Management — manual
+  // -------------------------------------------------------------------
+  ['2.8', () => manual('Provide evidence of cloud IAM least-privilege configuration: role/policy assignments, SSH key storage in secrets manager, and MFA enforcement for cloud console users. Include documentation of federated identity setup.')],
+
+  // -------------------------------------------------------------------
+  // 2.9: MFA Where Important Data Is Stored
+  // -------------------------------------------------------------------
+  ['2.9', (m365, google) => {
+    if (m365) {
+      const sd = m365.legacyAuthPolicies[0];
+      if (sd?.isEnabled) {
+        return { status: 'pass', score: 100, rawData: sd, notes: 'Microsoft Security Defaults enforce MFA for all access including cloud storage services.' };
+      }
+      // Look for CA policies requiring MFA or device compliance for cloud apps
+      // Accept enabled and report-only policies (report-only = partial credit)
+      const dataProtection = m365.conditionalAccessPolicies.filter((p) => {
+        const gc = p.grantControls as Record<string, string[]> ?? {};
+        const controls = gc.builtInControls ?? [];
+        return (p.state === 'enabled' || p.state === 'enabledForReportingButNotEnforced') &&
+          (controls.includes('mfa') || controls.includes('compliantDevice'));
+      });
+      // Device compliance policies
+      const comp = m365.deviceCompliancePolicies.filter((p) => p.state === 'enabled');
+      const hasPolicies = dataProtection.length > 0 || comp.length > 0;
+      return {
+        status: hasPolicies ? 'partial' : 'fail',
+        score: hasPolicies ? 70 : 0,
+        rawData: { caPolicies: dataProtection.length, compliancePolicies: comp.length },
+        notes: hasPolicies
+          ? `${dataProtection.length} CA policies and ${comp.length} device compliance policies provide some protection. Manual verification recommended to confirm all data storage systems require MFA.`
+          : 'No Conditional Access or device compliance policies found protecting cloud data storage. Enable Security Defaults or create CA policies requiring MFA for all cloud app access.',
+      };
+    }
+    if (google) {
+      return {
+        status: google.twoSVEnforced ? 'pass' : 'fail',
+        score: google.twoSVEnforced ? 100 : 0,
+        rawData: { twoSVEnforced: google.twoSVEnforced },
+        notes: google.twoSVEnforced
+          ? '2-Step Verification enforcement covers access to Google Drive, Gmail, and all Workspace data storage.'
+          : '2-Step Verification is NOT enforced, leaving cloud-hosted data storage unprotected by MFA.',
+      };
+    }
+    return na('No M365 or Google Workspace integration available. Provide manual evidence of MFA on all systems storing important digital data.');
   }],
 
   // -------------------------------------------------------------------
-  // REC controls
+  // 2.10: MFA on VPN — manual
   // -------------------------------------------------------------------
-  ['REC-001', () => manual('Backup strategy and recovery tests require manual verification')],
-  ['REC-002', () => manual('Recovery time objectives and BCP/DRP require manual verification')],
+  ['2.10', () => manual('Provide evidence that MFA is enforced on VPN connections: VPN configuration screenshots showing MFA integration (e.g., RADIUS with MFA, Azure AD integration). Mark as not applicable if VPN is not used.')],
+
+  // -------------------------------------------------------------------
+  // 2.11: MFA on RDP — manual
+  // -------------------------------------------------------------------
+  ['2.11', () => manual('Provide evidence that MFA is enforced on RDP connections: RD Gateway or third-party MFA solution configuration (e.g., Duo for Windows Logon). Mark as not applicable if RDP is not used.')],
+
+  // -------------------------------------------------------------------
+  // 2.12: Email Authentication (SPF, DKIM, DMARC)
+  // -------------------------------------------------------------------
+  ['2.12', (m365) => {
+    if (!m365) return na('No M365 integration available. Manually verify SPF, DKIM, and DMARC records for all email-sending domains via DNS lookup tools or your email provider portal.');
+
+    // DKIM check
+    if (m365.dkimSettings.length === 0) {
+      return manual('DKIM settings could not be retrieved. Verify DKIM configuration in the Microsoft Defender portal > Email & Collaboration > Policies > Email authentication settings.');
+    }
+    const dkimEnabled = m365.dkimSettings.filter((d) => d.enabled).length;
+    const dkimTotal = m365.dkimSettings.length;
+    const dkimPct = Math.round((dkimEnabled / dkimTotal) * 100);
+
+    // DMARC and SPF are DNS records — not available via Graph API.
+    // Automated check covers DKIM only. DMARC/SPF require manual evidence upload.
+    const hasDkim = dkimPct === 100;
+    const status: ResultStatus = hasDkim ? 'partial' : 'fail';
+    const score = hasDkim ? 60 : dkimPct > 0 ? 30 : 0;
+
+    const notes = [
+      `DKIM: ${dkimEnabled}/${dkimTotal} domains enabled (automated check).`,
+      !hasDkim && 'Enable DKIM signing for all domains in Microsoft Defender > Email & Collaboration > Policies & Rules > Email authentication settings.',
+      'DMARC and SPF cannot be verified via the M365 API. Upload DNS records or a third-party email authentication report as evidence to achieve a full pass for this control.',
+    ].filter(Boolean).join(' ');
+
+    return { status, score, rawData: { dkimEnabled, dkimTotal }, notes };
+  }],
+
+  // -------------------------------------------------------------------
+  // DOMAIN 3: BACKUP AND RECOVERY — manual
+  // -------------------------------------------------------------------
+  ['3.1', () => manual('Provide backup policy, recent backup job logs (last 30 days), confirmation of at least one offline/isolated backup copy, and evidence of a successful restore test within the last 12 months.')],
+  ['3.2', () => manual('Provide a copy of your current cyber liability insurance policy or certificate of currency showing coverage for cyber incidents including incident response support.')],
+
+  // -------------------------------------------------------------------
+  // DOMAIN 4: POLICIES, PROCESSES AND PLANS — all manual
+  // -------------------------------------------------------------------
+  ['4.1', () => manual('Provide your confidentiality agreement template and evidence that all current employees and contractors have signed it (HR records or acknowledgement register).')],
+  ['4.2', () => manual('Provide your invoice fraud prevention policy and evidence it has been communicated to all relevant staff. Include examples of dual-authorisation controls for high-value payments.')],
+  ['4.3', () => manual('Provide your visitor register (redacted) covering the last 3 months and visitor management procedure. Mark as not applicable if you have no physical office.')],
+  ['4.4', () => manual('Provide your cybersecurity policy document with version/review date and evidence that all employees have read and signed it.')],
+  ['4.5', () => manual('Provide the incident response plan document with version/review date, contact lists, and evidence of the last tabletop exercise or test. For Level 5, include communication templates and data breach notification guidance.')],
+  ['4.6', () => manual('Provide evidence of physical document destruction processes: shredder photos or document destruction service agreement, and procedure documentation.')],
+  ['4.7', () => manual('Provide your device disposal policy and records of devices disposed of in the last 12 months including disposal method. Include certificates of data destruction where available.')],
+  ['4.8', () => manual('Provide your digital asset register showing all systems that store important/confidential data, data types, owners, and access lists. For Level 5, include personal data inventory and annual review evidence.')],
+  ['4.9', () => manual('Provide your supplier risk management policy, evidence of supplier cybersecurity assessments, and examples of supplier contracts with cyber hygiene requirements and incident notification clauses.')],
+  ['4.10', () => manual('Provide your personnel vetting policy and evidence (redacted for privacy) that police checks have been completed for all employees and contractors with administrative privileges or controlled access.')],
+  ['4.11', () => manual('Provide your AI usage policy document with version/review date and evidence it has been communicated to all staff. Include any AI tool inventory and approved use case list.')],
+
+  // -------------------------------------------------------------------
+  // DOMAIN 5: EDUCATION AND TRAINING — manual
+  // -------------------------------------------------------------------
+  ['5.1', () => manual('Provide training completion records for all current employees showing training date and content. For Level 3+, provide evidence of ongoing training covering phishing, social engineering, BEC, and invoice fraud.')],
+  ['5.2', () => manual('Provide evidence of your most recent incident response training exercise (tabletop, functional, or full-scale): exercise report with date, participants, scenarios tested, and lessons learned.')],
 ]);

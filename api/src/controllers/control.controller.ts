@@ -25,9 +25,9 @@ export const controlController = {
 
     const controls = await query<Control>(
       `SELECT * FROM controls WHERE ${where}
-       ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2
-                              WHEN 'medium' THEN 3   WHEN 'low' THEN 4 ELSE 5 END,
-                category, control_id
+       ORDER BY
+         SPLIT_PART(control_id, '.', 1)::INTEGER,
+         SPLIT_PART(control_id, '.', 2)::INTEGER
        LIMIT $${i++} OFFSET $${i}`,
       values,
     );

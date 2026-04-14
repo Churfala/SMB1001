@@ -48,11 +48,39 @@ export interface Control {
   description: string;
   category: string;
   severity: ControlSeverity;
+  tier: number;
   validation_type: 'automated' | 'manual' | 'hybrid';
   integration_type: string;
   evidence_requirements: string | null;
   remediation_guidance: string | null;
   references: string[];
+}
+
+export type AssessmentStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'not_assessed';
+
+export interface Assessment {
+  control_db_id: string;
+  control_id: string;
+  control_name: string;
+  category: string;
+  tier: number;
+  assessment_id: string | null;
+  status: AssessmentStatus;
+  notes: string | null;
+  review_date: string | null;
+  reviewed_by: string | null;
+}
+
+export interface AssessmentEvidence {
+  id: string;
+  type: 'text' | 'file';
+  content: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  uploader_email: string;
+  uploader_name: string;
+  created_at: string;
 }
 
 export interface AuditResult {

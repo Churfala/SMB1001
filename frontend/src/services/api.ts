@@ -90,6 +90,8 @@ export const tenantApi = {
     api.post(`/tenants/${tenantId}/integrations`, data).then((r) => r.data),
   deleteIntegration: (tenantId: string, integrationId: string) =>
     api.delete(`/tenants/${tenantId}/integrations/${integrationId}`),
+  getSecureScore: (tenantId: string) =>
+    api.get(`/tenants/${tenantId}/secure-score`).then((r) => r.data),
 };
 
 // Audits
@@ -127,6 +129,12 @@ export const auditApi = {
     api.post(`/tenants/${tenantId}/schedules`, data).then((r) => r.data),
   deleteSchedule: (tenantId: string, scheduleId: string) =>
     api.delete(`/tenants/${tenantId}/schedules/${scheduleId}`),
+  runNow: (tenantId: string) =>
+    api.post(`/tenants/${tenantId}/audits/run-now`).then((r) => r.data),
+  getWeeklySchedule: (tenantId: string) =>
+    api.get(`/tenants/${tenantId}/weekly-schedule`).then((r) => r.data),
+  setWeeklySchedule: (tenantId: string, enabled: boolean) =>
+    api.put(`/tenants/${tenantId}/weekly-schedule`, { enabled }).then((r) => r.data),
 };
 
 // Controls
@@ -135,6 +143,25 @@ export const controlApi = {
     api.get('/controls', { params }).then((r) => r.data),
   getOne: (id: string) =>
     api.get(`/controls/${id}`).then((r) => r.data),
+};
+
+// Assessments (compliance register — persistent, per-tenant, per-control)
+export const assessmentApi = {
+  list: (tenantId: string) =>
+    api.get(`/tenants/${tenantId}/assessments`).then((r) => r.data),
+  upsert: (tenantId: string, controlId: string, data: { status?: string; notes?: string; review_date?: string | null }) =>
+    api.put(`/tenants/${tenantId}/assessments/${controlId}`, data).then((r) => r.data),
+  listEvidence: (tenantId: string, controlId: string) =>
+    api.get(`/tenants/${tenantId}/assessments/${controlId}/evidence`).then((r) => r.data),
+  addTextEvidence: (tenantId: string, controlId: string, content: string) =>
+    api.post(`/tenants/${tenantId}/assessments/${controlId}/evidence/text`, { content }).then((r) => r.data),
+  uploadFileEvidence: (tenantId: string, controlId: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post(`/tenants/${tenantId}/assessments/${controlId}/evidence/file`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then((r) => r.data);
+  },
 };
 
 // Reports

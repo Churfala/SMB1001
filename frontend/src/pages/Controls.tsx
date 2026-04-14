@@ -1,109 +1,607 @@
-import React, { useEffect, useState } from 'react';
-import { controlApi } from '../services/api';
-import { SeverityBadge } from '../components/StatusBadge';
-import type { Control } from '../types';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { controlApi, assessmentApi } from '../services/api';
+import { useTenant } from '../contexts/TenantContext';
+import { useAuth } from '../contexts/AuthContext';
+import type { Control, Assessment, AssessmentEvidence, AssessmentStatus } from '../types';
+
+// Domain display order
+const DOMAIN_ORDER = [
+  'Technology Management',
+  'Access Management',
+  'Backup and Recovery',
+  'Policies, Processes and Plans',
+  'Education and Training',
+];
+
+const DOMAIN_COLORS: Record<string, string> = {
+  'Technology Management':         '#2563eb',
+  'Access Management':             '#7c3aed',
+  'Backup and Recovery':           '#059669',
+  'Policies, Processes and Plans': '#d97706',
+  'Education and Training':        '#db2777',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  not_assessed:   'Not Assessed',
+  pass:           'Pass',
+  fail:           'Fail',
+  partial:        'Partial',
+  not_applicable: 'N/A',
+};
+
+const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
+  not_assessed:   { bg: '#f3f4f6', color: '#6b7280' },
+  pass:           { bg: '#dcfce7', color: '#166534' },
+  fail:           { bg: '#fee2e2', color: '#991b1b' },
+  partial:        { bg: '#fef3c7', color: '#92400e' },
+  not_applicable: { bg: '#f3f4f6', color: '#6b7280' },
+};
+
+const ASSESSMENT_STATUSES: AssessmentStatus[] = ['not_assessed', 'pass', 'partial', 'fail', 'not_applicable'];
+
+function isOverdue(reviewDate: string | null): boolean {
+  if (!reviewDate) return false;
+  return new Date(reviewDate) < new Date(new Date().toDateString());
+}
 
 export default function Controls() {
+  const { currentTenant } = useTenant();
+  const { user } = useAuth();
+  const canEdit = user?.role !== 'readonly';
+
   const [controls, setControls] = useState<Control[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedSeverity, setSelectedSeverity] = useState('');
+  const [assessmentMap, setAssessmentMap] = useState<Map<string, Assessment>>(new Map());
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
 
-  useEffect(() => {
-    const params: Record<string, string> = {};
-    if (selectedCategory) params.category = selectedCategory;
-    if (selectedSeverity) params.severity = selectedSeverity;
+  // Drawer state
+  const [selectedControl, setSelectedControl] = useState<Control | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerAssessment, setDrawerAssessment] = useState<Assessment | null>(null);
+  const [evidence, setEvidence] = useState<AssessmentEvidence[]>([]);
+  const [evidenceLoading, setEvidenceLoading] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [saving, setSaving] = useState(false);
 
-    controlApi.list(params).then((data) => {
-      setControls(data.controls ?? []);
-      if (data.categories) setCategories(data.categories);
-    }).finally(() => setLoading(false));
-  }, [selectedCategory, selectedSeverity]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const typeBadge = (t: string) => {
-    const colors: Record<string, string> = { automated: '#16a34a', manual: '#6b7280', hybrid: '#7c3aed' };
-    return (
-      <span style={{ fontSize: 10, fontWeight: 600, color: colors[t] ?? '#6b7280', border: `1px solid ${colors[t] ?? '#6b7280'}`, borderRadius: 3, padding: '1px 5px', textTransform: 'uppercase' }}>
-        {t}
-      </span>
-    );
+  // ── Load controls + assessments ──────────────────────────────────────
+  const load = useCallback(async () => {
+    if (!currentTenant) return;
+    setLoading(true);
+    try {
+      const [ctrlData, asmData] = await Promise.all([
+        controlApi.list({ limit: 100 }),
+        assessmentApi.list(currentTenant.id),
+      ]);
+      setControls(ctrlData.controls ?? []);
+      const map = new Map<string, Assessment>();
+      for (const a of (asmData.assessments ?? [])) {
+        map.set(a.control_db_id, a);
+      }
+      setAssessmentMap(map);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentTenant?.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Open drawer ──────────────────────────────────────────────────────
+  const openDrawer = async (control: Control) => {
+    setSelectedControl(control);
+    const existing = assessmentMap.get(control.id);
+    setDrawerAssessment(existing ?? {
+      control_db_id: control.id,
+      control_id: control.control_id,
+      control_name: control.name,
+      category: control.category,
+      tier: control.tier,
+      assessment_id: null,
+      status: 'not_assessed',
+      notes: null,
+      review_date: null,
+      reviewed_by: null,
+    });
+    setDrawerOpen(true);
+    setTextInput('');
+
+    if (!currentTenant) return;
+    setEvidenceLoading(true);
+    try {
+      const data = await assessmentApi.listEvidence(currentTenant.id, control.control_id);
+      setEvidence(data.evidence ?? []);
+    } finally {
+      setEvidenceLoading(false);
+    }
   };
 
+  const closeDrawer = () => {
+    setDrawerOpen(false);
+    setTimeout(() => setSelectedControl(null), 250);
+  };
+
+  // ── Save assessment field ────────────────────────────────────────────
+  const saveField = async (field: 'status' | 'notes' | 'review_date', value: string | null) => {
+    if (!currentTenant || !selectedControl || !canEdit) return;
+    setSaving(true);
+    try {
+      const current = drawerAssessment;
+      const updated = await assessmentApi.upsert(currentTenant.id, selectedControl.control_id, {
+        status: current?.status ?? 'not_assessed',
+        notes: current?.notes ?? null,
+        review_date: current?.review_date ?? null,
+        [field]: value,
+      });
+      const newAsm: Assessment = {
+        control_db_id: selectedControl.id,
+        control_id: selectedControl.control_id,
+        control_name: selectedControl.name,
+        category: selectedControl.category,
+        tier: selectedControl.tier,
+        assessment_id: updated.id,
+        status: updated.status,
+        notes: updated.notes,
+        review_date: updated.review_date,
+        reviewed_by: updated.reviewed_by,
+      };
+      setDrawerAssessment(newAsm);
+      setAssessmentMap((prev) => new Map(prev).set(selectedControl.id, newAsm));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Evidence handlers ────────────────────────────────────────────────
+  const handleAddText = async () => {
+    if (!currentTenant || !selectedControl || !textInput.trim()) return;
+    const ev = await assessmentApi.addTextEvidence(currentTenant.id, selectedControl.control_id, textInput.trim());
+    setEvidence((p) => [...p, ev]);
+    setTextInput('');
+    // Refresh assessment map so assessment_id is populated
+    if (!drawerAssessment?.assessment_id) {
+      const data = await assessmentApi.list(currentTenant.id);
+      const map = new Map<string, Assessment>();
+      for (const a of (data.assessments ?? [])) map.set(a.control_db_id, a);
+      setAssessmentMap(map);
+    }
+  };
+
+  const handleFileUpload = async (file: File) => {
+    if (!currentTenant || !selectedControl) return;
+    const ev = await assessmentApi.uploadFileEvidence(currentTenant.id, selectedControl.control_id, file);
+    setEvidence((p) => [...p, ev]);
+    if (!drawerAssessment?.assessment_id) {
+      const data = await assessmentApi.list(currentTenant.id);
+      const map = new Map<string, Assessment>();
+      for (const a of (data.assessments ?? [])) map.set(a.control_db_id, a);
+      setAssessmentMap(map);
+    }
+  };
+
+  // ── Group controls by domain ─────────────────────────────────────────
+  const grouped = DOMAIN_ORDER.map((domain) => ({
+    domain,
+    controls: controls.filter((c) => c.category === domain),
+  })).filter((g) => g.controls.length > 0);
+
+  if (loading) {
+    return (
+      <div style={{ padding: 40, textAlign: 'center', color: '#6b7280', fontFamily: 'system-ui, sans-serif' }}>
+        Loading controls…
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>SMB1001 Controls</h1>
-        <p style={{ fontSize: 14, color: '#6b7280', margin: '4px 0 0' }}>{controls.length} controls in the catalogue</p>
+    <div style={{ fontFamily: 'system-ui, -apple-system, sans-serif', color: '#111827' }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Controls</h1>
+        <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
+          SMB1001:2026 compliance register — {controls.length} controls across {grouped.length} domains
+        </p>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-        <select value={selectedCategory} onChange={(e) => setSelectedCategory(e.target.value)} style={selectStyle}>
-          <option value="">All Categories</option>
-          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <select value={selectedSeverity} onChange={(e) => setSelectedSeverity(e.target.value)} style={selectStyle}>
-          <option value="">All Severities</option>
-          {['critical', 'high', 'medium', 'low'].map((s) => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-        </select>
-      </div>
-
-      <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #e5e7eb' }}>
-        {loading ? (
-          <div style={{ padding: 40, textAlign: 'center', color: '#6b7280' }}>Loading…</div>
-        ) : (
-          controls.map((control, idx) => (
-            <div key={control.id} style={{ borderTop: idx > 0 ? '1px solid #f3f4f6' : 'none' }}>
-              <div
-                onClick={() => setExpanded(expanded === control.id ? null : control.id)}
-                style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', cursor: 'pointer', gap: 12, backgroundColor: expanded === control.id ? '#f9fafb' : '#fff' }}
-              >
-                <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', minWidth: 70 }}>{control.control_id}</span>
-                <span style={{ flex: 1, fontSize: 14, color: '#111827', fontWeight: 500 }}>{control.name}</span>
-                <span style={{ fontSize: 12, color: '#9ca3af', minWidth: 80 }}>{control.category}</span>
-                <SeverityBadge severity={control.severity} />
-                {typeBadge(control.validation_type)}
-                <span style={{ color: '#9ca3af', fontSize: 12 }}>{expanded === control.id ? '▲' : '▼'}</span>
-              </div>
-
-              {expanded === control.id && (
-                <div style={{ padding: '4px 16px 16px 16px', backgroundColor: '#f9fafb', borderTop: '1px solid #f3f4f6' }}>
-                  <p style={{ fontSize: 13, color: '#374151', margin: '10px 0 12px' }}>{control.description}</p>
-                  {control.evidence_requirements && (
-                    <div style={{ marginBottom: 10 }}>
-                      <strong style={{ fontSize: 12, color: '#374151' }}>Evidence Required:</strong>
-                      <p style={{ fontSize: 12, color: '#6b7280', margin: '3px 0 0' }}>{control.evidence_requirements}</p>
-                    </div>
-                  )}
-                  {control.remediation_guidance && (
-                    <div style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '10px 12px' }}>
-                      <strong style={{ fontSize: 12, color: '#92400e' }}>Remediation Guidance:</strong>
-                      <p style={{ fontSize: 12, color: '#78350f', margin: '4px 0 0' }}>{control.remediation_guidance}</p>
-                    </div>
-                  )}
-                  {control.references?.length > 0 && (
-                    <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af' }}>
-                      References: {control.references.join(' · ')}
-                    </div>
-                  )}
-                </div>
-              )}
+      {/* Domain sections */}
+      {grouped.map(({ domain, controls: domainControls }) => {
+        const color = DOMAIN_COLORS[domain] ?? '#2563eb';
+        const passCount = domainControls.filter((c) => assessmentMap.get(c.id)?.status === 'pass').length;
+        return (
+          <div key={domain} style={{ marginBottom: 32 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 4, height: 20, backgroundColor: color, borderRadius: 2, flexShrink: 0 }} />
+              <h2 style={{ fontSize: 15, fontWeight: 600, margin: 0, color: '#111827' }}>{domain}</h2>
+              <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                {passCount}/{domainControls.length} passed
+              </span>
             </div>
-          ))
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+              gap: 10,
+            }}>
+              {domainControls.map((control) => {
+                const asm = assessmentMap.get(control.id);
+                const overdue = isOverdue(asm?.review_date ?? null);
+                const statusInfo = STATUS_COLORS[asm?.status ?? 'not_assessed'];
+                return (
+                  <div
+                    key={control.id}
+                    onClick={() => openDrawer(control)}
+                    style={{
+                      backgroundColor: overdue ? '#fff1f0' : '#fff',
+                      border: `1px solid ${overdue ? '#fca5a5' : '#e5e7eb'}`,
+                      borderRadius: 8,
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      transition: 'box-shadow 0.15s, border-color 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = '0 2px 8px rgba(0,0,0,0.10)';
+                      if (!overdue) (e.currentTarget as HTMLDivElement).style.borderColor = '#9ca3af';
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLDivElement).style.boxShadow = 'none';
+                      (e.currentTarget as HTMLDivElement).style.borderColor = overdue ? '#fca5a5' : '#e5e7eb';
+                    }}
+                  >
+                    {/* Top row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, color,
+                        backgroundColor: `${color}18`, borderRadius: 4,
+                        padding: '2px 6px', letterSpacing: '0.02em',
+                      }}>
+                        {control.control_id}
+                      </span>
+                      <span style={{
+                        fontSize: 10, color: '#9ca3af',
+                        backgroundColor: '#f3f4f6', borderRadius: 4,
+                        padding: '2px 5px',
+                      }}>
+                        T{control.tier}
+                      </span>
+                      {control.validation_type === 'automated' && (
+                        <span style={{
+                          fontSize: 10, color: '#2563eb',
+                          backgroundColor: '#dbeafe', borderRadius: 4,
+                          padding: '2px 5px',
+                        }}>auto</span>
+                      )}
+                    </div>
+
+                    {/* Name */}
+                    <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', lineHeight: 1.4, marginBottom: 10 }}>
+                      {control.name}
+                    </div>
+
+                    {/* Bottom row */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600,
+                        backgroundColor: statusInfo.bg, color: statusInfo.color,
+                        borderRadius: 4, padding: '2px 7px',
+                      }}>
+                        {STATUS_LABELS[asm?.status ?? 'not_assessed']}
+                      </span>
+                      {asm?.review_date && (
+                        <span style={{ fontSize: 11, color: overdue ? '#dc2626' : '#6b7280', fontWeight: overdue ? 600 : 400 }}>
+                          {overdue ? '⚠ ' : ''}{new Date(asm.review_date + 'T00:00:00').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+
+      {/* Backdrop */}
+      <div
+        onClick={closeDrawer}
+        style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          zIndex: 100,
+          opacity: drawerOpen ? 1 : 0,
+          pointerEvents: drawerOpen ? 'auto' : 'none',
+          transition: 'opacity 0.25s',
+        }}
+      />
+
+      {/* Drawer */}
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: 480,
+        backgroundColor: '#fff',
+        zIndex: 101,
+        boxShadow: '-4px 0 24px rgba(0,0,0,0.12)',
+        transform: drawerOpen ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.25s ease',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+      }}>
+        {selectedControl && (
+          <DrawerContent
+            control={selectedControl}
+            assessment={drawerAssessment}
+            evidence={evidence}
+            evidenceLoading={evidenceLoading}
+            textInput={textInput}
+            saving={saving}
+            canEdit={canEdit}
+            onClose={closeDrawer}
+            onSaveField={saveField}
+            onTextInputChange={setTextInput}
+            onAddText={handleAddText}
+            fileInputRef={fileInputRef}
+          />
         )}
       </div>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.docx,.doc,.xlsx,.xls"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFileUpload(file);
+          e.target.value = '';
+        }}
+      />
     </div>
   );
 }
 
-const selectStyle: React.CSSProperties = {
-  border: '1px solid #d1d5db',
-  borderRadius: 6,
-  padding: '6px 12px',
-  fontSize: 13,
-  color: '#374151',
-  cursor: 'pointer',
-  backgroundColor: '#fff',
-};
+// ── Drawer Content ───────────────────────────────────────────────────────────
+
+interface DrawerProps {
+  control: Control;
+  assessment: Assessment | null;
+  evidence: AssessmentEvidence[];
+  evidenceLoading: boolean;
+  textInput: string;
+  saving: boolean;
+  canEdit: boolean;
+  onClose: () => void;
+  onSaveField: (field: 'status' | 'notes' | 'review_date', value: string | null) => void;
+  onTextInputChange: (v: string) => void;
+  onAddText: () => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+}
+
+function DrawerContent({
+  control, assessment, evidence, evidenceLoading, textInput,
+  saving, canEdit, onClose, onSaveField, onTextInputChange, onAddText, fileInputRef,
+}: DrawerProps) {
+  const color = DOMAIN_COLORS[control.category] ?? '#2563eb';
+  const overdue = isOverdue(assessment?.review_date ?? null);
+  const [localNotes, setLocalNotes] = useState(assessment?.notes ?? '');
+
+  useEffect(() => {
+    setLocalNotes(assessment?.notes ?? '');
+  }, [assessment?.notes]);
+
+  return (
+    <>
+      {/* Header */}
+      <div style={{ padding: '20px 20px 16px', borderBottom: '1px solid #f3f4f6', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: 12, fontWeight: 700, color,
+                backgroundColor: `${color}18`, borderRadius: 4, padding: '2px 8px',
+              }}>
+                {control.control_id}
+              </span>
+              <span style={{ fontSize: 11, color: '#9ca3af', backgroundColor: '#f3f4f6', borderRadius: 4, padding: '2px 6px' }}>
+                Tier {control.tier}
+              </span>
+              {control.validation_type === 'automated' && (
+                <span style={{ fontSize: 11, color: '#2563eb', backgroundColor: '#dbeafe', borderRadius: 4, padding: '2px 6px' }}>
+                  Automated
+                </span>
+              )}
+            </div>
+            <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#111827', lineHeight: 1.3 }}>
+              {control.name}
+            </h2>
+            <p style={{ fontSize: 12, color: '#9ca3af', margin: '4px 0 0' }}>{control.category}</p>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', padding: 4, fontSize: 22, lineHeight: 1, flexShrink: 0 }}
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding: '16px 20px', flex: 1 }}>
+        {/* Description */}
+        <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: '0 0 14px' }}>
+          {control.description}
+        </p>
+
+        {/* Evidence requirements */}
+        {control.evidence_requirements && (
+          <div style={{
+            backgroundColor: '#fffbeb', border: '1px solid #fde68a',
+            borderRadius: 6, padding: '10px 12px', marginBottom: 14,
+          }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: '#92400e', margin: '0 0 4px' }}>Evidence Requirements</p>
+            <p style={{ fontSize: 12, color: '#78350f', margin: 0, lineHeight: 1.5 }}>{control.evidence_requirements}</p>
+          </div>
+        )}
+
+        {/* Remediation guidance */}
+        {control.remediation_guidance && (
+          <div style={{
+            backgroundColor: '#fffbeb', border: '1px solid #fde68a',
+            borderRadius: 6, padding: '10px 12px', marginBottom: 14,
+          }}>
+            <p style={{ fontSize: 12, fontWeight: 600, color: '#92400e', margin: '0 0 4px' }}>Remediation Guidance</p>
+            <p style={{ fontSize: 12, color: '#78350f', margin: 0, lineHeight: 1.5 }}>{control.remediation_guidance}</p>
+          </div>
+        )}
+
+        {/* Assessment form */}
+        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 16, marginBottom: 0 }}>
+          {saving && <p style={{ fontSize: 11, color: '#9ca3af', margin: '0 0 8px', textAlign: 'right' }}>Saving…</p>}
+
+          {/* Status */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>
+              Assessment Status
+            </label>
+            <select
+              value={assessment?.status ?? 'not_assessed'}
+              disabled={!canEdit}
+              onChange={(e) => onSaveField('status', e.target.value)}
+              style={{
+                width: '100%', padding: '7px 10px', fontSize: 13,
+                border: '1px solid #d1d5db', borderRadius: 6, color: '#111827',
+                backgroundColor: canEdit ? '#fff' : '#f9fafb',
+              }}
+            >
+              {ASSESSMENT_STATUSES.map((s) => (
+                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Review Date */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: overdue ? '#dc2626' : '#374151', marginBottom: 5 }}>
+              {overdue ? '⚠ Review Date (Overdue)' : 'Next Review Date'}
+            </label>
+            <input
+              type="date"
+              value={assessment?.review_date ?? ''}
+              disabled={!canEdit}
+              onChange={(e) => onSaveField('review_date', e.target.value || null)}
+              style={{
+                width: '100%', padding: '7px 10px', fontSize: 13,
+                border: `1px solid ${overdue ? '#fca5a5' : '#d1d5db'}`, borderRadius: 6,
+                color: overdue ? '#dc2626' : '#111827',
+                backgroundColor: canEdit ? '#fff' : '#f9fafb',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 5 }}>
+              Notes
+            </label>
+            <textarea
+              value={localNotes}
+              disabled={!canEdit}
+              onChange={(e) => setLocalNotes(e.target.value)}
+              onBlur={() => onSaveField('notes', localNotes || null)}
+              placeholder="Add compliance notes, observations, or remediation actions…"
+              rows={4}
+              style={{
+                width: '100%', padding: '8px 10px', fontSize: 13,
+                border: '1px solid #d1d5db', borderRadius: 6, color: '#111827',
+                backgroundColor: canEdit ? '#fff' : '#f9fafb',
+                resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Evidence section */}
+        <div style={{ borderTop: '1px solid #f3f4f6', paddingTop: 16, marginTop: 16 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 600, color: '#374151', margin: '0 0 12px' }}>
+            Evidence &amp; Documentation
+          </h3>
+
+          {evidenceLoading ? (
+            <p style={{ fontSize: 12, color: '#9ca3af' }}>Loading…</p>
+          ) : evidence.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>No evidence attached yet.</p>
+          ) : (
+            <div style={{ marginBottom: 12 }}>
+              {evidence.map((ev) => (
+                <div key={ev.id} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  padding: '8px 0', borderBottom: '1px solid #f9fafb',
+                }}>
+                  <span style={{ fontSize: 16, flexShrink: 0 }}>{ev.type === 'file' ? '📎' : '📝'}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {ev.type === 'file' ? (
+                      <p style={{ fontSize: 13, margin: 0, fontWeight: 500, color: '#111827', wordBreak: 'break-all' }}>
+                        {ev.file_name}
+                        {ev.file_size != null && (
+                          <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 6 }}>
+                            ({Math.round(ev.file_size / 1024)}KB)
+                          </span>
+                        )}
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: 13, margin: 0, color: '#374151', lineHeight: 1.4 }}>{ev.content}</p>
+                    )}
+                    <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>
+                      {ev.uploader_name} · {new Date(ev.created_at).toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canEdit && (
+            <>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <input
+                  type="text"
+                  value={textInput}
+                  onChange={(e) => onTextInputChange(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') onAddText(); }}
+                  placeholder="Add text evidence…"
+                  style={{
+                    flex: 1, padding: '7px 10px', fontSize: 13,
+                    border: '1px solid #d1d5db', borderRadius: 6, color: '#111827',
+                  }}
+                />
+                <button
+                  onClick={onAddText}
+                  disabled={!textInput.trim()}
+                  style={{
+                    padding: '7px 14px', fontSize: 13, fontWeight: 500,
+                    backgroundColor: textInput.trim() ? '#2563eb' : '#e5e7eb',
+                    color: textInput.trim() ? '#fff' : '#9ca3af',
+                    border: 'none', borderRadius: 6,
+                    cursor: textInput.trim() ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  Add
+                </button>
+              </div>
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  width: '100%', padding: '8px 0', fontSize: 13, fontWeight: 500,
+                  backgroundColor: '#f9fafb', color: '#374151',
+                  border: '1px dashed #d1d5db', borderRadius: 6, cursor: 'pointer',
+                }}
+              >
+                Upload file (PDF, image, document)
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
