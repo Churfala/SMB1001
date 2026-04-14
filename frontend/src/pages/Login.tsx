@@ -167,10 +167,7 @@ export default function Login() {
           </button>
         </form>
 
-        <div style={{ marginTop: 32, borderTop: '1px solid #f3f4f6', paddingTop: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>
-            Default: admin@msp.local / Admin1234!
-          </p>
+        <div style={{ marginTop: 32, borderTop: '1px solid #f3f4f6', paddingTop: 16, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#d1d5db' }}>v{__APP_VERSION__}</span>
         </div>
       </div>
