@@ -170,17 +170,34 @@ export const authController = {
   },
 
   async me(request: FastifyRequest, reply: FastifyReply) {
-    const user = await queryOne(
-      `SELECT u.id, u.email, u.role, u.first_name, u.last_name, u.is_active,
-              t.id AS tenant_id, t.name AS tenant_name, t.slug AS tenant_slug
+    const row = await queryOne<{
+      id: string; email: string; role: string; is_active: boolean;
+      first_name: string | null; last_name: string | null;
+      tenant_id: string; tenant_name: string; tenant_slug: string;
+      has_password: boolean;
+    }>(
+      `SELECT u.id, u.email, u.role, u.is_active,
+              u.first_name, u.last_name,
+              t.id AS tenant_id, t.name AS tenant_name, t.slug AS tenant_slug,
+              (u.password_hash <> '') AS has_password
        FROM users u
        JOIN tenants t ON t.id = u.tenant_id
        WHERE u.id = $1`,
       [request.user.sub],
     );
 
-    if (!user) return reply.status(404).send({ error: 'User not found' });
-    return reply.send(user);
+    if (!row) return reply.status(404).send({ error: 'User not found' });
+    return reply.send({
+      id: row.id,
+      email: row.email,
+      role: row.role,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      tenantId: row.tenant_id,
+      tenantName: row.tenant_name,
+      tenantSlug: row.tenant_slug,
+      has_password: row.has_password,
+    });
   },
 
   async ssoLogin(_request: FastifyRequest, reply: FastifyReply) {

@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { authApi, settingsApi } from '../services/api';
+import { useTenant } from '../contexts/TenantContext';
+import { authApi, settingsApi, tenantApi } from '../services/api';
+import type { UserRole } from '../types';
 
-type Tab = 'profile' | 'sso';
+type Tab = 'profile' | 'users' | 'sso';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 const suggestedCallback = `${API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE}/auth/sso/callback`;
@@ -117,7 +119,8 @@ const PRESETS: Record<ProviderKey, Preset> = {
 };
 
 // ---------------------------------------------------------------------------
-
+// Types
+// ---------------------------------------------------------------------------
 interface SsoState {
   provider: ProviderKey;
   provider_label: string;
@@ -150,11 +153,31 @@ const DEFAULT_SSO: SsoState = {
   is_enabled: false,
 };
 
+interface TenantUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  first_name: string | null;
+  last_name: string | null;
+  is_active: boolean;
+  is_sso: boolean;
+  last_login: string | null;
+}
+
+// ---------------------------------------------------------------------------
+
 export default function Settings() {
   const { user } = useAuth();
+  const { currentTenant } = useTenant();
+  const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('profile');
 
-  // --- Profile ---
+  // Redirect non-admins away from admin tabs
+  useEffect(() => {
+    if (!isAdmin && (tab === 'users' || tab === 'sso')) setTab('profile');
+  }, [isAdmin, tab]);
+
+  // ── Profile ──────────────────────────────────────────────────────────────
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -173,7 +196,75 @@ export default function Settings() {
     } finally { setPwSaving(false); }
   };
 
-  // --- SSO ---
+  // ── Users ─────────────────────────────────────────────────────────────────
+  const [users, setUsers] = useState<TenantUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [addForm, setAddForm] = useState({ email: '', first_name: '', last_name: '', role: 'auditor' as UserRole, password: '' });
+  const [addSaving, setAddSaving] = useState(false);
+  const [addMsg, setAddMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [roleUpdating, setRoleUpdating] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (tab !== 'users' || !currentTenant) return;
+    setUsersLoading(true);
+    tenantApi.listUsers(currentTenant.id)
+      .then((d) => setUsers(d.users ?? []))
+      .catch(() => {})
+      .finally(() => setUsersLoading(false));
+  }, [tab, currentTenant?.id]);
+
+  const handleAddUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentTenant) return;
+    setAddSaving(true); setAddMsg(null);
+    try {
+      await tenantApi.createUser(currentTenant.id, {
+        email: addForm.email,
+        firstName: addForm.first_name || undefined,
+        lastName: addForm.last_name || undefined,
+        role: addForm.role,
+        password: addForm.password || undefined,
+      });
+      setAddMsg({ ok: true, text: `User ${addForm.email} created` });
+      setAddForm({ email: '', first_name: '', last_name: '', role: 'auditor', password: '' });
+      setShowAddUser(false);
+      const d = await tenantApi.listUsers(currentTenant.id);
+      setUsers(d.users ?? []);
+    } catch (err: unknown) {
+      setAddMsg({ ok: false, text: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to create user' });
+    } finally { setAddSaving(false); }
+  };
+
+  const handleRoleChange = async (u: TenantUser, role: UserRole) => {
+    if (!currentTenant) return;
+    setRoleUpdating(u.id);
+    try {
+      await tenantApi.updateUser(currentTenant.id, u.id, { role });
+      setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, role } : x));
+    } catch { /* ignore */ }
+    finally { setRoleUpdating(null); }
+  };
+
+  const handleToggleActive = async (u: TenantUser) => {
+    if (!currentTenant) return;
+    try {
+      await tenantApi.updateUser(currentTenant.id, u.id, { isActive: !u.is_active });
+      setUsers((prev) => prev.map((x) => x.id === u.id ? { ...x, is_active: !u.is_active } : x));
+    } catch { /* ignore */ }
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    if (!currentTenant) return;
+    try {
+      await tenantApi.deleteUser(currentTenant.id, id);
+      setUsers((prev) => prev.filter((x) => x.id !== id));
+    } catch { /* ignore */ }
+    finally { setDeleteConfirm(null); }
+  };
+
+  // ── SSO ──────────────────────────────────────────────────────────────────
   const [sso, setSso] = useState<SsoState>(DEFAULT_SSO);
   const [ssoLoading, setSsoLoading] = useState(true);
   const [ssoSaving, setSsoSaving] = useState(false);
@@ -262,23 +353,24 @@ export default function Settings() {
 
   const preset = PRESETS[sso.provider] ?? PRESETS.custom;
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 720 }}>
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 20 }}>Settings</h1>
 
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', marginBottom: 24 }}>
-        {(['profile', 'sso'] as Tab[]).map((t) => (
+        {(['profile', ...(isAdmin ? ['users', 'sso'] : [])] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '8px 20px', fontSize: 14, fontWeight: 500, border: 'none',
             borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
             backgroundColor: 'transparent', color: tab === t ? '#2563eb' : '#6b7280', cursor: 'pointer',
           }}>
-            {t === 'profile' ? 'Profile' : 'SSO Configuration'}
+            {t === 'profile' ? 'Profile' : t === 'users' ? 'Users' : 'SSO Configuration'}
           </button>
         ))}
       </div>
 
-      {/* ---- Profile ---- */}
+      {/* ── Profile ── */}
       {tab === 'profile' && (
         <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: 24 }}>
           <div style={{ marginBottom: 12 }}>
@@ -289,20 +381,178 @@ export default function Settings() {
             <div style={{ fontSize: 12, fontWeight: 500, color: '#6b7280', marginBottom: 2 }}>Role</div>
             <div style={{ fontSize: 14, color: '#111827', textTransform: 'capitalize' }}>{user?.role}</div>
           </div>
-          <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '0 0 20px' }} />
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>Change Password</h2>
-          <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div><label style={labelStyle}>Current Password</label><input type="password" value={pwForm.current} onChange={(e) => setPwForm((f) => ({ ...f, current: e.target.value }))} required style={inputStyle} /></div>
-            <div><label style={labelStyle}>New Password <span style={{ color: '#9ca3af', fontWeight: 400 }}>(min 12 characters)</span></label><input type="password" value={pwForm.next} onChange={(e) => setPwForm((f) => ({ ...f, next: e.target.value }))} required minLength={12} style={inputStyle} /></div>
-            <div><label style={labelStyle}>Confirm New Password</label><input type="password" value={pwForm.confirm} onChange={(e) => setPwForm((f) => ({ ...f, confirm: e.target.value }))} required style={inputStyle} /></div>
-            {pwMsg && <div style={{ backgroundColor: pwMsg.ok ? '#dcfce7' : '#fee2e2', color: pwMsg.ok ? '#16a34a' : '#991b1b', padding: '8px 12px', borderRadius: 6, fontSize: 13 }}>{pwMsg.text}</div>}
-            <button type="submit" disabled={pwSaving} style={btnStyle(pwSaving)}>{pwSaving ? 'Saving…' : 'Update Password'}</button>
-          </form>
+          {user?.has_password !== false && (
+            <>
+              <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '0 0 20px' }} />
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>Change Password</h2>
+              <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div><label style={labelStyle}>Current Password</label><input type="password" value={pwForm.current} onChange={(e) => setPwForm((f) => ({ ...f, current: e.target.value }))} required style={inputStyle} /></div>
+                <div><label style={labelStyle}>New Password <span style={{ color: '#9ca3af', fontWeight: 400 }}>(min 12 characters)</span></label><input type="password" value={pwForm.next} onChange={(e) => setPwForm((f) => ({ ...f, next: e.target.value }))} required minLength={12} style={inputStyle} /></div>
+                <div><label style={labelStyle}>Confirm New Password</label><input type="password" value={pwForm.confirm} onChange={(e) => setPwForm((f) => ({ ...f, confirm: e.target.value }))} required style={inputStyle} /></div>
+                {pwMsg && <div style={{ backgroundColor: pwMsg.ok ? '#dcfce7' : '#fee2e2', color: pwMsg.ok ? '#16a34a' : '#991b1b', padding: '8px 12px', borderRadius: 6, fontSize: 13 }}>{pwMsg.text}</div>}
+                <button type="submit" disabled={pwSaving} style={btnStyle(pwSaving)}>{pwSaving ? 'Saving…' : 'Update Password'}</button>
+              </form>
+            </>
+          )}
+          {user?.has_password === false && (
+            <div style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1d4ed8' }}>
+              You are signed in via SSO — password management is handled by your identity provider.
+            </div>
+          )}
         </div>
       )}
 
-      {/* ---- SSO ---- */}
-      {tab === 'sso' && (
+      {/* ── Users ── */}
+      {tab === 'users' && isAdmin && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>
+              Manage users for this ControlCheck instance.
+            </p>
+            <button onClick={() => { setShowAddUser((v) => !v); setAddMsg(null); }} style={btnStyle(false)}>
+              {showAddUser ? 'Cancel' : '+ Add User'}
+            </button>
+          </div>
+
+          {/* Add user form */}
+          {showAddUser && (
+            <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 20, marginBottom: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 16px' }}>New User</h3>
+              <form onSubmit={handleAddUser} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label style={labelStyle}>Email <span style={{ color: '#ef4444' }}>*</span></label>
+                    <input type="email" value={addForm.email} onChange={(e) => setAddForm((f) => ({ ...f, email: e.target.value }))} required style={inputStyle} placeholder="user@example.com" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Role</label>
+                    <select value={addForm.role} onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as UserRole }))} style={inputStyle}>
+                      <option value="auditor">Auditor</option>
+                      <option value="admin">Admin</option>
+                      <option value="readonly">Read Only</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>First Name</label>
+                    <input value={addForm.first_name} onChange={(e) => setAddForm((f) => ({ ...f, first_name: e.target.value }))} style={inputStyle} placeholder="Optional" />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Last Name</label>
+                    <input value={addForm.last_name} onChange={(e) => setAddForm((f) => ({ ...f, last_name: e.target.value }))} style={inputStyle} placeholder="Optional" />
+                  </div>
+                </div>
+                <div>
+                  <label style={labelStyle}>
+                    Password <span style={{ color: '#9ca3af', fontWeight: 400 }}>(leave blank for SSO-only)</span>
+                  </label>
+                  <input type="password" value={addForm.password} onChange={(e) => setAddForm((f) => ({ ...f, password: e.target.value }))} style={inputStyle} placeholder="Min 12 characters, or leave blank" minLength={addForm.password ? 12 : undefined} />
+                </div>
+                {addMsg && <div style={{ backgroundColor: addMsg.ok ? '#dcfce7' : '#fee2e2', color: addMsg.ok ? '#16a34a' : '#991b1b', padding: '8px 12px', borderRadius: 6, fontSize: 13 }}>{addMsg.text}</div>}
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button type="submit" disabled={addSaving} style={btnStyle(addSaving)}>{addSaving ? 'Creating…' : 'Create User'}</button>
+                  <button type="button" onClick={() => setShowAddUser(false)} style={{ ...btnStyle(false), backgroundColor: '#f3f4f6', color: '#374151' }}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Users table */}
+          <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+            {usersLoading ? (
+              <p style={{ padding: 24, color: '#9ca3af', fontSize: 14, margin: 0 }}>Loading…</p>
+            ) : users.length === 0 ? (
+              <p style={{ padding: 24, color: '#9ca3af', fontSize: 14, margin: 0 }}>No users found.</p>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb' }}>
+                    <th style={thStyle}>User</th>
+                    <th style={thStyle}>Role</th>
+                    <th style={thStyle}>Type</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Last Login</th>
+                    <th style={thStyle}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((u) => (
+                    <tr key={u.id} style={{ borderBottom: '1px solid #f3f4f6', opacity: u.is_active ? 1 : 0.5 }}>
+                      <td style={tdStyle}>
+                        <div style={{ fontWeight: 500, color: '#111827' }}>{u.email}</div>
+                        {(u.first_name || u.last_name) && (
+                          <div style={{ color: '#6b7280', fontSize: 12 }}>{[u.first_name, u.last_name].filter(Boolean).join(' ')}</div>
+                        )}
+                      </td>
+                      <td style={tdStyle}>
+                        {deleteConfirm === u.id ? (
+                          <span style={{ color: '#9ca3af', fontSize: 12 }}>{u.role}</span>
+                        ) : (
+                          <select
+                            value={u.role}
+                            disabled={roleUpdating === u.id}
+                            onChange={(e) => handleRoleChange(u, e.target.value as UserRole)}
+                            style={{
+                              border: '1px solid #d1d5db', borderRadius: 5, padding: '3px 6px',
+                              fontSize: 12, color: '#374151', cursor: 'pointer',
+                              backgroundColor: roleUpdating === u.id ? '#f9fafb' : '#fff',
+                            }}
+                          >
+                            <option value="admin">Admin</option>
+                            <option value="auditor">Auditor</option>
+                            <option value="readonly">Read Only</option>
+                          </select>
+                        )}
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
+                          backgroundColor: u.is_sso ? '#eff6ff' : '#f3f4f6',
+                          color: u.is_sso ? '#1d4ed8' : '#6b7280',
+                        }}>
+                          {u.is_sso ? 'SSO' : 'Password'}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 600, padding: '2px 7px', borderRadius: 4,
+                          backgroundColor: u.is_active ? '#dcfce7' : '#f3f4f6',
+                          color: u.is_active ? '#16a34a' : '#6b7280',
+                        }}>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{ color: '#6b7280', fontSize: 12 }}>
+                          {u.last_login ? new Date(u.last_login).toLocaleDateString() : '—'}
+                        </span>
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        {deleteConfirm === u.id ? (
+                          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                            <span style={{ fontSize: 12, color: '#374151' }}>Delete?</span>
+                            <button onClick={() => handleDeleteUser(u.id)} style={dangerBtnStyle}>Yes</button>
+                            <button onClick={() => setDeleteConfirm(null)} style={ghostBtnStyle}>No</button>
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', gap: 6 }}>
+                            <button onClick={() => handleToggleActive(u)} style={ghostBtnStyle}>
+                              {u.is_active ? 'Deactivate' : 'Activate'}
+                            </button>
+                            <button onClick={() => setDeleteConfirm(u.id)} style={dangerBtnStyle}>Delete</button>
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── SSO ── */}
+      {tab === 'sso' && isAdmin && (
         <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: 24 }}>
           {ssoLoading ? <p style={{ color: '#9ca3af', fontSize: 14 }}>Loading…</p> : (
             <form onSubmit={handleSaveSso} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -429,8 +679,18 @@ export default function Settings() {
 
 const labelStyle: React.CSSProperties = { display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 5 };
 const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #d1d5db', borderRadius: 6, padding: '8px 12px', fontSize: 14, color: '#111827', boxSizing: 'border-box' };
+const thStyle: React.CSSProperties = { padding: '10px 14px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em' };
+const tdStyle: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
 const btnStyle = (disabled: boolean): React.CSSProperties => ({
   alignSelf: 'flex-start', backgroundColor: disabled ? '#93c5fd' : '#2563eb',
   color: '#fff', border: 'none', borderRadius: 8, padding: '9px 20px',
   fontSize: 14, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
 });
+const ghostBtnStyle: React.CSSProperties = {
+  backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb',
+  borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+};
+const dangerBtnStyle: React.CSSProperties = {
+  backgroundColor: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca',
+  borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+};

@@ -55,7 +55,8 @@ export const tenantService = {
   // Users within a tenant
   async listUsers(tenantId: string): Promise<Omit<User, 'password_hash'>[]> {
     return query<Omit<User, 'password_hash'>>(
-      `SELECT id, tenant_id, email, role, first_name, last_name, is_active, last_login, created_at, updated_at
+      `SELECT id, tenant_id, email, role, first_name, last_name, is_active, last_login, created_at, updated_at,
+              (password_hash = '') AS is_sso
        FROM users WHERE tenant_id = $1 ORDER BY created_at DESC`,
       [tenantId],
     );
@@ -63,7 +64,7 @@ export const tenantService = {
 
   async createUser(tenantId: string, data: {
     email: string;
-    password: string;
+    password?: string;
     role: UserRole;
     firstName?: string;
     lastName?: string;
@@ -71,7 +72,7 @@ export const tenantService = {
     const existing = await queryOne('SELECT id FROM users WHERE tenant_id = $1 AND email = $2', [tenantId, data.email.toLowerCase()]);
     if (existing) throw new Error('A user with this email already exists in this tenant');
 
-    const hash = await authService.hashPassword(data.password);
+    const hash = data.password ? await authService.hashPassword(data.password) : '';
     const user = await queryOne<Omit<User, 'password_hash'>>(
       `INSERT INTO users (tenant_id, email, password_hash, role, first_name, last_name)
        VALUES ($1, $2, $3, $4, $5, $6)

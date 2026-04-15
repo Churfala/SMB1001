@@ -12,6 +12,7 @@ export interface User {
   tenantId: string;
   tenantName: string;
   tenantSlug: string;
+  has_password?: boolean;
 }
 
 export interface AuthState {

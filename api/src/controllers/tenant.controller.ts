@@ -106,21 +106,21 @@ export const tenantController = {
     const { tenantId } = request.params as { tenantId: string };
     const { email, password, role, firstName, lastName } = request.body as {
       email: string;
-      password: string;
+      password?: string;
       role: UserRole;
       firstName?: string;
       lastName?: string;
     };
 
-    if (!email || !password || !role) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'email, password, and role are required' });
+    if (!email || !role) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'email and role are required' });
     }
 
     if (!['admin', 'auditor', 'readonly'].includes(role)) {
       return reply.status(400).send({ error: 'Bad Request', message: 'role must be admin, auditor, or readonly' });
     }
 
-    if (password.length < 12) {
+    if (password && password.length < 12) {
       return reply.status(400).send({ error: 'Bad Request', message: 'Password must be at least 12 characters' });
     }
 
