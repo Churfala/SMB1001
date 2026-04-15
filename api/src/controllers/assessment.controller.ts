@@ -85,6 +85,30 @@ export const assessmentController = {
     return reply.send(row);
   },
 
+  // GET /tenants/:tenantId/assessments/summary
+  async summary(request: FastifyRequest, reply: FastifyReply) {
+    const { tenantId } = request.params as { tenantId: string };
+    const row = await queryOne<{
+      pass: number; fail: number; partial: number;
+      not_applicable: number; not_assessed: number;
+      total: number; overdue: number;
+    }>(
+      `SELECT
+         COUNT(*) FILTER (WHERE COALESCE(a.status, 'not_assessed') = 'pass')            AS pass,
+         COUNT(*) FILTER (WHERE COALESCE(a.status, 'not_assessed') = 'fail')            AS fail,
+         COUNT(*) FILTER (WHERE COALESCE(a.status, 'not_assessed') = 'partial')         AS partial,
+         COUNT(*) FILTER (WHERE COALESCE(a.status, 'not_assessed') = 'not_applicable')  AS not_applicable,
+         COUNT(*) FILTER (WHERE a.id IS NULL)                                            AS not_assessed,
+         COUNT(*)                                                                         AS total,
+         COUNT(*) FILTER (WHERE a.review_date IS NOT NULL AND a.review_date < CURRENT_DATE) AS overdue
+       FROM controls c
+       LEFT JOIN control_assessments a ON a.control_id = c.id AND a.tenant_id = $1
+       WHERE c.is_active = true`,
+      [tenantId],
+    );
+    return reply.send(row ?? { pass: 0, fail: 0, partial: 0, not_applicable: 0, not_assessed: 0, total: 0, overdue: 0 });
+  },
+
   // GET /tenants/:tenantId/assessments/overdue
   async overdueCount(request: FastifyRequest, reply: FastifyReply) {
     const { tenantId } = request.params as { tenantId: string };

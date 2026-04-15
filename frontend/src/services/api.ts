@@ -188,6 +188,8 @@ export const assessmentApi = {
   },
   overdueCount: (tenantId: string) =>
     api.get(`/tenants/${tenantId}/assessments/overdue`).then((r) => r.data),
+  summary: (tenantId: string) =>
+    api.get(`/tenants/${tenantId}/assessments/summary`).then((r) => r.data),
 };
 
 // Reports

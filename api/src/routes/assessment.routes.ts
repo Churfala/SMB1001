@@ -12,7 +12,13 @@ export async function assessmentRoutes(app: FastifyInstance) {
     assessmentController.list,
   );
 
-  // Must be registered before /:controlId routes to avoid "overdue" being treated as controlId
+  // Must be registered before /:controlId routes to avoid literal strings being treated as controlId
+  app.get(
+    '/:tenantId/assessments/summary',
+    { preHandler: [validateTenantAccess] as any },
+    assessmentController.summary,
+  );
+
   app.get(
     '/:tenantId/assessments/overdue',
     { preHandler: [validateTenantAccess] as any },
