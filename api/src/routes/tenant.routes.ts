@@ -8,9 +8,10 @@ export async function tenantRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authenticate);
 
   // ------------------------------------------------------------------
-  // Tenants (admin only for create/list-all)
+  // Tenants
   // ------------------------------------------------------------------
-  app.get('/', { preHandler: [requireRole('admin')] as any }, tenantController.list);
+  // GET / is open to all authenticated users; the controller filters by role
+  app.get('/', tenantController.list);
   app.post('/', { preHandler: [requireRole('admin')] as any }, tenantController.create);
   app.get('/:id', tenantController.getOne);
   app.put('/:id', { preHandler: [requireRole('admin')] as any }, tenantController.update);
@@ -49,6 +50,27 @@ export async function tenantRoutes(app: FastifyInstance) {
       preHandler: [validateTenantAccess, requireRole('admin')] as any,
     },
     tenantController.deleteUser,
+  );
+
+  // ------------------------------------------------------------------
+  // Per-user tenant access grants
+  // ------------------------------------------------------------------
+  app.get(
+    '/:tenantId/users/:userId/access',
+    { preHandler: [validateTenantAccess, requireRole('admin')] as any },
+    tenantController.listUserAccess,
+  );
+
+  app.put(
+    '/:tenantId/users/:userId/access/:targetTenantId',
+    { preHandler: [validateTenantAccess, requireRole('admin')] as any },
+    tenantController.grantAccess,
+  );
+
+  app.delete(
+    '/:tenantId/users/:userId/access/:targetTenantId',
+    { preHandler: [validateTenantAccess, requireRole('admin')] as any },
+    tenantController.revokeAccess,
   );
 
   // ------------------------------------------------------------------

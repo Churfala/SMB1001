@@ -9,9 +9,14 @@ export const tenantController = {
   // Tenants
   // ------------------------------------------------------------------
   async list(request: FastifyRequest, reply: FastifyReply) {
-    const { limit = 50, offset = 0 } = request.query as { limit?: number; offset?: number };
-    const result = await tenantService.list(limit, offset);
-    return reply.send(result);
+    if (request.user.role === 'admin') {
+      const { limit = 50, offset = 0 } = request.query as { limit?: number; offset?: number };
+      const result = await tenantService.list(limit, offset);
+      return reply.send(result);
+    }
+    // Non-admin: return only tenants this user is allowed to see
+    const tenants = await tenantService.listForUser(request.user.sub, request.user.tenant_id);
+    return reply.send({ tenants, total: tenants.length });
   },
 
   async getOne(request: FastifyRequest, reply: FastifyReply) {
@@ -187,6 +192,48 @@ export const tenantController = {
       return reply.status(204).send();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to delete user';
+      return reply.status(400).send({ error: 'Bad Request', message });
+    }
+  },
+
+  // ------------------------------------------------------------------
+  // Per-user tenant access grants
+  // ------------------------------------------------------------------
+  async listUserAccess(request: FastifyRequest, reply: FastifyReply) {
+    const { userId } = request.params as { userId: string };
+    const access = await tenantService.listUserTenantAccess(userId);
+    return reply.send({ access });
+  },
+
+  async grantAccess(request: FastifyRequest, reply: FastifyReply) {
+    const { userId, targetTenantId } = request.params as { userId: string; targetTenantId: string };
+    await tenantService.grantTenantAccess(userId, targetTenantId, request.user.sub);
+    await auditLogService.log({
+      tenantId: request.user.tenant_id,
+      userId: request.user.sub,
+      action: 'user.tenant_access.granted',
+      resourceType: 'user',
+      resourceId: userId,
+      details: { target_tenant_id: targetTenantId },
+    });
+    return reply.status(204).send();
+  },
+
+  async revokeAccess(request: FastifyRequest, reply: FastifyReply) {
+    const { userId, targetTenantId } = request.params as { userId: string; targetTenantId: string };
+    try {
+      await tenantService.revokeTenantAccess(userId, targetTenantId);
+      await auditLogService.log({
+        tenantId: request.user.tenant_id,
+        userId: request.user.sub,
+        action: 'user.tenant_access.revoked',
+        resourceType: 'user',
+        resourceId: userId,
+        details: { target_tenant_id: targetTenantId },
+      });
+      return reply.status(204).send();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to revoke access';
       return reply.status(400).send({ error: 'Bad Request', message });
     }
   },

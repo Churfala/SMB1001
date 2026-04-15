@@ -52,7 +52,54 @@ export const tenantService = {
     return tenant;
   },
 
-  // Users within a tenant
+  // ── Tenant access grants ─────────────────────────────────────────────────
+
+  /** Return tenants accessible to a non-admin user: home tenant + explicit grants. */
+  async listForUser(userId: string, homeTenantId: string): Promise<Tenant[]> {
+    return query<Tenant>(
+      `SELECT DISTINCT t.*
+       FROM tenants t
+       WHERE t.id = $1 AND t.status != 'suspended'
+       UNION
+       SELECT DISTINCT t.*
+       FROM tenants t
+       JOIN user_tenant_access uta ON uta.tenant_id = t.id
+       WHERE uta.user_id = $2 AND t.status != 'suspended'
+       ORDER BY name ASC`,
+      [homeTenantId, userId],
+    );
+  },
+
+  async grantTenantAccess(userId: string, tenantId: string, grantedBy: string): Promise<void> {
+    await query(
+      `INSERT INTO user_tenant_access (user_id, tenant_id, granted_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, tenant_id) DO NOTHING`,
+      [userId, tenantId, grantedBy],
+    );
+  },
+
+  async revokeTenantAccess(userId: string, tenantId: string): Promise<void> {
+    // Prevent revoking a user's home tenant (it's always accessible without a grant row)
+    const user = await queryOne<{ tenant_id: string }>('SELECT tenant_id FROM users WHERE id = $1', [userId]);
+    if (!user) throw new Error('User not found');
+    if (user.tenant_id === tenantId) throw new Error("Cannot revoke access to a user's home tenant");
+    await query('DELETE FROM user_tenant_access WHERE user_id = $1 AND tenant_id = $2', [userId, tenantId]);
+  },
+
+  async listUserTenantAccess(userId: string): Promise<{ tenant_id: string; tenant_name: string; granted_at: Date }[]> {
+    return query(
+      `SELECT uta.tenant_id, t.name AS tenant_name, uta.granted_at
+       FROM user_tenant_access uta
+       JOIN tenants t ON t.id = uta.tenant_id
+       WHERE uta.user_id = $1
+       ORDER BY t.name ASC`,
+      [userId],
+    );
+  },
+
+  // ── Users within a tenant ─────────────────────────────────────────────────
+
   async listUsers(tenantId: string): Promise<Omit<User, 'password_hash'>[]> {
     return query<Omit<User, 'password_hash'>>(
       `SELECT id, tenant_id, email, role, first_name, last_name, is_active, last_login, created_at, updated_at,

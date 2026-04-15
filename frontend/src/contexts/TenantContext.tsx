@@ -23,18 +23,15 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
     if (!user) return;
     setIsLoading(true);
     try {
-      if (user.role === 'admin') {
-        const data = await tenantApi.list();
-        setTenants(data.tenants ?? []);
-        const saved = localStorage.getItem('currentTenantId');
-        const found = data.tenants?.find((t: Tenant) => t.id === saved) ?? data.tenants?.[0] ?? null;
-        if (found && !currentTenant) setCurrentTenantState(found);
-      } else {
-        // Non-admin users only see their own tenant
-        const tenant = await tenantApi.getOne(user.tenantId);
-        setTenants([tenant]);
-        setCurrentTenantState(tenant);
-      }
+      // Both admin and non-admin call the same endpoint.
+      // Admin: server returns all tenants.
+      // Non-admin: server returns home tenant + explicitly granted tenants.
+      const data = await tenantApi.list();
+      const accessible: Tenant[] = data.tenants ?? [];
+      setTenants(accessible);
+      const saved = localStorage.getItem('currentTenantId');
+      const found = accessible.find((t: Tenant) => t.id === saved) ?? accessible[0] ?? null;
+      if (found && !currentTenant) setCurrentTenantState(found);
     } catch (err) {
       console.error('Failed to load tenants:', err);
     } finally {
