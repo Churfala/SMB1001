@@ -185,6 +185,7 @@ export default function Settings() {
           ...prev,
           ...d,
           provider: (d.provider as ProviderKey) ?? 'entra',
+          redirect_uri: d.redirect_uri || suggestedCallback,
           client_secret: '',
           extraValue: '',
         }));
@@ -238,7 +239,7 @@ export default function Settings() {
       await settingsApi.updateSso(payload);
       setSsoMsg({ ok: true, text: 'SSO settings saved' });
       const d = await settingsApi.getSso();
-      setSso((prev) => ({ ...prev, ...d, provider: d.provider as ProviderKey, client_secret: '', extraValue: '' }));
+      setSso((prev) => ({ ...prev, ...d, provider: d.provider as ProviderKey, redirect_uri: d.redirect_uri || suggestedCallback, client_secret: '', extraValue: '' }));
     } catch (err: unknown) {
       setSsoMsg({ ok: false, text: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to save settings' });
     } finally { setSsoSaving(false); }
