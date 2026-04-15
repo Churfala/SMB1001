@@ -45,7 +45,7 @@ async function loadSsoConfig(): Promise<SsoConfig | null> {
       tokenUrl: row.token_url,
       clientId: row.client_id,
       clientSecret: decrypt(row.encrypted_client_secret),
-      redirectUri: row.redirect_uri || '',
+      redirectUri: (row.redirect_uri ?? '').trim(),
       scopes: row.scopes || 'openid email profile',
       ssoTenantSlug: row.sso_tenant_slug,
       autoProvision: row.auto_provision,

@@ -14,7 +14,7 @@ type ProviderKey = 'entra' | 'cloudflare' | 'okta' | 'custom';
 
 interface Preset {
   label: string;
-  buildUrls: (extra: string) => { authorization_url: string; token_url: string };
+  buildUrls: (extra: string, clientId?: string) => { authorization_url: string; token_url: string };
   extraField?: { key: string; label: string; placeholder: string; hint?: string };
   scopes?: string;
   instructions: React.ReactNode;
@@ -53,11 +53,15 @@ const PRESETS: Record<ProviderKey, Preset> = {
       key: 'team_domain',
       label: 'Cloudflare Team Domain',
       placeholder: 'your-team',
-      hint: 'Subdomain of your Cloudflare Access team — e.g. "acme" for acme.cloudflareaccess.com',
+      hint: 'Subdomain of your Cloudflare Access team — e.g. "globalpc" for globalpc.cloudflareaccess.com',
     },
-    buildUrls: (teamDomain) => ({
-      authorization_url: teamDomain ? `https://${teamDomain}.cloudflareaccess.com/cdn-cgi/access/sso/oidc/authorization` : '',
-      token_url: teamDomain ? `https://${teamDomain}.cloudflareaccess.com/cdn-cgi/access/sso/oidc/token` : '',
+    buildUrls: (teamDomain, clientId) => ({
+      authorization_url: teamDomain && clientId
+        ? `https://${teamDomain}.cloudflareaccess.com/cdn-cgi/access/sso/oidc/${clientId}/authorization`
+        : '',
+      token_url: teamDomain && clientId
+        ? `https://${teamDomain}.cloudflareaccess.com/cdn-cgi/access/sso/oidc/${clientId}/token`
+        : '',
     }),
     instructions: (
       <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.7 }}>
@@ -66,8 +70,8 @@ const PRESETS: Record<ProviderKey, Preset> = {
           <li>In the <strong>Cloudflare Zero Trust</strong> dashboard, go to <strong>Access</strong> → <strong>Applications</strong> → <strong>Add an application</strong>.</li>
           <li>Choose <strong>SaaS</strong> as the application type.</li>
           <li>Set <strong>Application URL</strong> to your ControlCheck frontend URL. Under <strong>Redirect URIs</strong>, paste the Redirect URI shown below.</li>
-          <li>Copy the <strong>Client ID</strong> and <strong>Client secret</strong>.</li>
-          <li>Enter your team subdomain above to auto-fill the Authorization and Token URLs, then paste in the Client ID and Secret below.</li>
+          <li>Copy the <strong>Client ID</strong> and <strong>Client secret</strong> from the application settings.</li>
+          <li>Enter your team subdomain and Client ID above — the Authorization and Token URLs are built automatically (Cloudflare embeds the Client ID in the URL path).</li>
         </ol>
       </div>
     ),
@@ -210,12 +214,23 @@ export default function Settings() {
 
   const handleExtraChange = (value: string) => {
     const preset = PRESETS[sso.provider];
-    const urls = preset.buildUrls(value);
+    const urls = preset.buildUrls(value, sso.client_id);
     setSso((s) => ({
       ...s,
       extraValue: value,
       authorization_url: urls.authorization_url || s.authorization_url,
       token_url: urls.token_url || s.token_url,
+    }));
+  };
+
+  const handleClientIdChange = (value: string) => {
+    const preset = PRESETS[sso.provider];
+    const urls = preset.buildUrls(sso.extraValue, value);
+    setSso((s) => ({
+      ...s,
+      client_id: value,
+      ...(urls.authorization_url ? { authorization_url: urls.authorization_url } : {}),
+      ...(urls.token_url ? { token_url: urls.token_url } : {}),
     }));
   };
 
@@ -362,7 +377,7 @@ export default function Settings() {
 
               <div>
                 <label style={labelStyle}>Client ID</label>
-                <input value={sso.client_id} onChange={(e) => setSso((s) => ({ ...s, client_id: e.target.value }))} placeholder="Application / Client ID" style={inputStyle} />
+                <input value={sso.client_id} onChange={(e) => handleClientIdChange(e.target.value)} placeholder="Application / Client ID" style={inputStyle} />
               </div>
 
               <div>
