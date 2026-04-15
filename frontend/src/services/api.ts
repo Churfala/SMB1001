@@ -83,12 +83,12 @@ export const tenantApi = {
     api.put(`/tenants/${tenantId}/users/${userId}`, data).then((r) => r.data),
   deleteUser: (tenantId: string, userId: string) =>
     api.delete(`/tenants/${tenantId}/users/${userId}`),
-  listUserAccess: (tenantId: string, userId: string) =>
-    api.get(`/tenants/${tenantId}/users/${userId}/access`).then((r) => r.data),
-  grantAccess: (tenantId: string, userId: string, targetTenantId: string) =>
-    api.put(`/tenants/${tenantId}/users/${userId}/access/${targetTenantId}`).then((r) => r.data),
-  revokeAccess: (tenantId: string, userId: string, targetTenantId: string) =>
-    api.delete(`/tenants/${tenantId}/users/${userId}/access/${targetTenantId}`),
+  listUserExclusions: (tenantId: string, userId: string) =>
+    api.get(`/tenants/${tenantId}/users/${userId}/exclusions`).then((r) => r.data),
+  excludeTenant: (tenantId: string, userId: string, targetTenantId: string) =>
+    api.put(`/tenants/${tenantId}/users/${userId}/exclusions/${targetTenantId}`).then((r) => r.data),
+  includeTenant: (tenantId: string, userId: string, targetTenantId: string) =>
+    api.delete(`/tenants/${tenantId}/users/${userId}/exclusions/${targetTenantId}`),
   delete: (id: string) => api.delete(`/tenants/${id}`),
   listIntegrations: (tenantId: string) =>
     api.get(`/tenants/${tenantId}/integrations`).then((r) => r.data),

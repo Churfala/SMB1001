@@ -202,7 +202,7 @@ export default function Settings() {
 
   const [users, setUsers] = useState<TenantUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
-  const [userAccess, setUserAccess] = useState<Record<string, string[]>>({}); // userId → tenantId[]
+  const [userExclusions, setUserExclusions] = useState<Record<string, string[]>>({}); // userId → excluded tenantId[]
   const [accessUpdating, setAccessUpdating] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
   const [addForm, setAddForm] = useState({ email: '', first_name: '', last_name: '', role: 'auditor' as UserRole, password: '' });
@@ -218,15 +218,15 @@ export default function Settings() {
       .then(async (d) => {
         const us: TenantUser[] = d.users ?? [];
         setUsers(us);
-        // Load access grants for all users in parallel
+        // Load exclusions for all users in parallel
         const entries = await Promise.all(
           us.map((u) =>
-            tenantApi.listUserAccess(currentTenant.id, u.id)
-              .then((r) => [u.id, (r.access as { tenant_id: string }[]).map((a) => a.tenant_id)] as const)
+            tenantApi.listUserExclusions(currentTenant.id, u.id)
+              .then((r) => [u.id, (r.exclusions as { tenant_id: string }[]).map((e) => e.tenant_id)] as const)
               .catch(() => [u.id, []] as const),
           ),
         );
-        setUserAccess(Object.fromEntries(entries));
+        setUserExclusions(Object.fromEntries(entries));
       })
       .catch(() => {})
       .finally(() => setUsersLoading(false));
@@ -277,27 +277,27 @@ export default function Settings() {
     try {
       await tenantApi.deleteUser(currentTenant.id, id);
       setUsers((prev) => prev.filter((x) => x.id !== id));
-      setUserAccess((prev) => { const n = { ...prev }; delete n[id]; return n; });
+      setUserExclusions((prev) => { const n = { ...prev }; delete n[id]; return n; });
     } catch { /* ignore */ }
     finally { setDeleteConfirm(null); }
   };
 
-  const handleGrantAccess = async (userId: string, targetTenantId: string) => {
+  const handleExcludeTenant = async (userId: string, targetTenantId: string) => {
     if (!currentTenant) return;
     setAccessUpdating(userId);
     try {
-      await tenantApi.grantAccess(currentTenant.id, userId, targetTenantId);
-      setUserAccess((prev) => ({ ...prev, [userId]: [...(prev[userId] ?? []), targetTenantId] }));
+      await tenantApi.excludeTenant(currentTenant.id, userId, targetTenantId);
+      setUserExclusions((prev) => ({ ...prev, [userId]: [...(prev[userId] ?? []), targetTenantId] }));
     } catch { /* ignore */ }
     finally { setAccessUpdating(null); }
   };
 
-  const handleRevokeAccess = async (userId: string, targetTenantId: string) => {
+  const handleIncludeTenant = async (userId: string, targetTenantId: string) => {
     if (!currentTenant) return;
     setAccessUpdating(userId);
     try {
-      await tenantApi.revokeAccess(currentTenant.id, userId, targetTenantId);
-      setUserAccess((prev) => ({ ...prev, [userId]: (prev[userId] ?? []).filter((id) => id !== targetTenantId) }));
+      await tenantApi.includeTenant(currentTenant.id, userId, targetTenantId);
+      setUserExclusions((prev) => ({ ...prev, [userId]: (prev[userId] ?? []).filter((id) => id !== targetTenantId) }));
     } catch { /* ignore */ }
     finally { setAccessUpdating(null); }
   };
@@ -509,7 +509,7 @@ export default function Settings() {
                     <th style={thStyle}>Type</th>
                     <th style={thStyle}>Status</th>
                     <th style={thStyle}>Last Login</th>
-                    <th style={thStyle}>Client Access</th>
+                    <th style={thStyle}>Restrict Tenants</th>
                     <th style={thStyle}></th>
                   </tr>
                 </thead>
@@ -570,27 +570,26 @@ export default function Settings() {
                           <span style={{ color: '#9ca3af', fontSize: 12 }}>All (admin)</span>
                         ) : (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                            {allTenants
-                              .filter((t: Tenant) => t.id !== u.tenant_id)
-                              .map((t: Tenant) => {
-                                const granted = (userAccess[u.id] ?? []).includes(t.id);
+                            {allTenants.length <= 1 ? (
+                              <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                            ) : (
+                              allTenants.map((t: Tenant) => {
+                                const excluded = (userExclusions[u.id] ?? []).includes(t.id);
                                 return (
                                   <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, cursor: accessUpdating === u.id ? 'wait' : 'pointer' }}>
                                     <input
                                       type="checkbox"
-                                      checked={granted}
+                                      checked={!excluded}
                                       disabled={accessUpdating === u.id}
-                                      onChange={() => granted
-                                        ? handleRevokeAccess(u.id, t.id)
-                                        : handleGrantAccess(u.id, t.id)
+                                      onChange={() => excluded
+                                        ? handleIncludeTenant(u.id, t.id)
+                                        : handleExcludeTenant(u.id, t.id)
                                       }
                                     />
                                     {t.name}
                                   </label>
                                 );
-                              })}
-                            {allTenants.filter((t: Tenant) => t.id !== u.tenant_id).length === 0 && (
-                              <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                              })
                             )}
                           </div>
                         )}

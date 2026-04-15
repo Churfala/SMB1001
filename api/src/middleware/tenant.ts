@@ -29,20 +29,17 @@ export async function validateTenantAccess(
     return;
   }
 
-  // Non-admin: check home tenant shortcut OR an explicit grant in user_tenant_access
+  // Non-admin: access any non-suspended tenant UNLESS explicitly excluded
   const access = await queryOne<{ ok: boolean }>(
     `SELECT TRUE AS ok
      FROM tenants t
      WHERE t.id = $1
        AND t.status != 'suspended'
-       AND (
-         t.id = $2
-         OR EXISTS (
-           SELECT 1 FROM user_tenant_access
-           WHERE user_id = $3 AND tenant_id = t.id
-         )
+       AND NOT EXISTS (
+         SELECT 1 FROM user_tenant_exclusions
+         WHERE user_id = $2 AND tenant_id = t.id
        )`,
-    [tenantId, user.tenant_id, user.sub],
+    [tenantId, user.sub],
   );
 
   if (!access) {

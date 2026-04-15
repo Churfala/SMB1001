@@ -56,21 +56,21 @@ export async function tenantRoutes(app: FastifyInstance) {
   // Per-user tenant access grants
   // ------------------------------------------------------------------
   app.get(
-    '/:tenantId/users/:userId/access',
+    '/:tenantId/users/:userId/exclusions',
     { preHandler: [validateTenantAccess, requireRole('admin')] as any },
-    tenantController.listUserAccess,
+    tenantController.listUserExclusions,
   );
 
   app.put(
-    '/:tenantId/users/:userId/access/:targetTenantId',
+    '/:tenantId/users/:userId/exclusions/:targetTenantId',
     { preHandler: [validateTenantAccess, requireRole('admin')] as any },
-    tenantController.grantAccess,
+    tenantController.excludeTenant,
   );
 
   app.delete(
-    '/:tenantId/users/:userId/access/:targetTenantId',
+    '/:tenantId/users/:userId/exclusions/:targetTenantId',
     { preHandler: [validateTenantAccess, requireRole('admin')] as any },
-    tenantController.revokeAccess,
+    tenantController.includeTenant,
   );
 
   // ------------------------------------------------------------------
