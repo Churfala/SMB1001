@@ -38,5 +38,6 @@ export const env = {
   ENTRA_AUTO_PROVISION: process.env.ENTRA_AUTO_PROVISION !== 'false',
 
   // Frontend URL (for SSO redirects)
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+  FRONTEND_URL: process.env.FRONTEND_URL ||
+    (process.env.NODE_ENV === 'production' ? 'https://controlcheck.globaltechnology.nz' : 'http://localhost:5173'),
 } as const;
