@@ -58,7 +58,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
       MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-10}
-      FRONTEND_URL: ${FRONTEND_URL:-https://controlcheck.globaltechnology.nz}
+      FRONTEND_URL: ${FRONTEND_URL}  # Required: public URL of the frontend (e.g. https://controlcheck.example.com)
     volumes:
       - uploads:/app/uploads
     depends_on:
