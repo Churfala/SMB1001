@@ -2,15 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { assessmentApi } from '../services/api';
 import { useTenant } from '../contexts/TenantContext';
-import { TIERS } from '../utils/tiers';
 import type { Tenant } from '../types';
-
-interface LatestAudit {
-  id: string;
-  score: number | null;
-  tiers: Record<string, boolean> | null;
-  completed_at: string;
-}
 
 interface TenantSummary {
   pass: number;
@@ -20,21 +12,12 @@ interface TenantSummary {
   not_assessed: number;
   total: number;
   overdue: number;
-  latest_audit: LatestAudit | null;
 }
 
 const EMPTY: TenantSummary = {
   pass: 0, fail: 0, partial: 0, not_applicable: 0,
-  not_assessed: 0, total: 0, overdue: 0, latest_audit: null,
+  not_assessed: 0, total: 0, overdue: 0,
 };
-
-function highestTier(tiers: Record<string, boolean> | null | undefined): number | null {
-  if (!tiers) return null;
-  for (let t = 5; t >= 1; t--) {
-    if (tiers[t] === true || tiers[String(t)] === true) return t;
-  }
-  return null;
-}
 
 export default function Dashboard() {
   const { tenants, currentTenant, setCurrentTenant } = useTenant();
@@ -65,11 +48,6 @@ export default function Dashboard() {
   const handleViewControls = (tenant: Tenant) => {
     setCurrentTenant(tenant);
     navigate('/controls');
-  };
-
-  const handleViewAudits = (tenant: Tenant) => {
-    setCurrentTenant(tenant);
-    navigate('/audits');
   };
 
   if (loading) {
@@ -105,7 +83,6 @@ export default function Dashboard() {
           <span style={{ textAlign: 'center' }}>N/A</span>
           <span style={{ textAlign: 'center' }}>Unassessed</span>
           <span style={{ textAlign: 'center' }}>Overdue</span>
-          <span>Cert Level</span>
           <span />
         </div>
 
@@ -119,8 +96,6 @@ export default function Dashboard() {
             const assessed = s.pass + s.fail + s.partial + s.not_applicable;
             const pct = s.total > 0 ? Math.round((s.pass / s.total) * 100) : 0;
             const isSelected = currentTenant?.id === tenant.id;
-            const tier = highestTier(s.latest_audit?.tiers);
-            const tierData = tier !== null ? TIERS.find((t) => t.tier === tier) : null;
 
             return (
               <div
@@ -133,11 +108,11 @@ export default function Dashboard() {
                 {/* Stacked colour bar */}
                 {assessed > 0 && (
                   <div style={{ display: 'flex', height: 3 }}>
-                    {s.pass > 0           && <div style={{ flex: s.pass,          backgroundColor: '#16a34a' }} />}
-                    {s.fail > 0           && <div style={{ flex: s.fail,          backgroundColor: '#dc2626' }} />}
-                    {s.partial > 0        && <div style={{ flex: s.partial,       backgroundColor: '#d97706' }} />}
+                    {s.pass > 0           && <div style={{ flex: s.pass,           backgroundColor: '#16a34a' }} />}
+                    {s.fail > 0           && <div style={{ flex: s.fail,           backgroundColor: '#dc2626' }} />}
+                    {s.partial > 0        && <div style={{ flex: s.partial,        backgroundColor: '#d97706' }} />}
                     {s.not_applicable > 0 && <div style={{ flex: s.not_applicable, backgroundColor: '#d1d5db' }} />}
-                    {s.not_assessed > 0   && <div style={{ flex: s.not_assessed,  backgroundColor: '#f3f4f6' }} />}
+                    {s.not_assessed > 0   && <div style={{ flex: s.not_assessed,   backgroundColor: '#f3f4f6' }} />}
                   </div>
                 )}
 
@@ -168,36 +143,8 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* Cert level */}
-                  <div>
-                    {tierData ? (
-                      <span style={{
-                        backgroundColor: tierData.bg, color: tierData.color,
-                        borderRadius: 5, padding: '2px 9px', fontSize: 12, fontWeight: 600,
-                      }}>
-                        {tierData.name}
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 12, color: '#d1d5db' }}>
-                        {s.latest_audit ? 'None' : 'No audit'}
-                      </span>
-                    )}
-                  </div>
-
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <button
-                      onClick={() => handleViewAudits(tenant)}
-                      style={{
-                        backgroundColor: 'transparent',
-                        color: '#6b7280',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: 6, padding: '5px 12px',
-                        cursor: 'pointer', fontSize: 13,
-                      }}
-                    >
-                      Audits
-                    </button>
                     <button
                       onClick={() => handleViewControls(tenant)}
                       style={{
@@ -249,7 +196,7 @@ function CountCell({ value, colour, dim = false }: { value: number; colour: stri
 
 const headerRow: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '1fr 64px 64px 72px 64px 100px 80px 100px 180px',
+  gridTemplateColumns: '1fr 64px 64px 72px 64px 100px 80px 120px',
   padding: '9px 16px',
   backgroundColor: '#f9fafb',
   borderBottom: '1px solid #e5e7eb',
@@ -262,7 +209,7 @@ const headerRow: React.CSSProperties = {
 
 const dataRow: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '1fr 64px 64px 72px 64px 100px 80px 100px 180px',
+  gridTemplateColumns: '1fr 64px 64px 72px 64px 100px 80px 120px',
   padding: '14px 16px',
   alignItems: 'center',
 };

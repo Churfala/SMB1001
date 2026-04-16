@@ -71,7 +71,6 @@ export default function Layout() {
           </span>
           <div style={{ display: 'flex', gap: 24 }}>
             {navLink('/dashboard', 'Dashboard')}
-            {navLink('/audits', 'Audits')}
             {navLink('/controls', 'Controls', overdueCount > 0 ? overdueCount : undefined)}
             {user?.role === 'admin' && navLink('/tenants', 'Tenants')}
             {navLink('/settings', 'Settings')}

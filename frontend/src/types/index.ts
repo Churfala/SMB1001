@@ -1,6 +1,4 @@
 export type UserRole = 'admin' | 'auditor' | 'readonly';
-export type AuditStatus = 'pending' | 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
-export type ResultStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'manual_review';
 export type ControlSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface User {
@@ -72,65 +70,4 @@ export interface AssessmentEvidence {
   created_at: string;
 }
 
-export interface AuditResult {
-  id: string;
-  audit_id: string;
-  control_id: string;
-  control_code: string;
-  control_name: string;
-  category: string;
-  severity: ControlSeverity;
-  tier: number;
-  description: string;
-  remediation_guidance: string | null;
-  evidence_requirements: string | null;
-  validation_type: 'automated' | 'manual' | 'hybrid';
-  status: ResultStatus;
-  score: number | null;
-  notes: string | null;
-  reviewer_name: string | null;
-  reviewed_at: string | null;
-}
 
-export interface Audit {
-  id: string;
-  tenant_id: string;
-  name: string;
-  status: AuditStatus;
-  score: number | null;
-  job_id: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  summary: {
-    pass?: number;
-    fail?: number;
-    partial?: number;
-    not_applicable?: number;
-    manual_review?: number;
-    tiers?: Record<string, boolean>;
-  };
-  created_at: string;
-  results?: AuditResult[];
-}
-
-export interface Evidence {
-  id: string;
-  type: 'text' | 'file';
-  content: string | null;
-  file_name: string | null;
-  file_size: number | null;
-  mime_type: string | null;
-  uploader_email: string;
-  uploader_name: string;
-  created_at: string;
-}
-
-export interface AuditSchedule {
-  id: string;
-  name: string;
-  cron_expression: string;
-  is_active: boolean;
-  last_run: string | null;
-  next_run: string | null;
-  created_at: string;
-}

@@ -92,61 +92,6 @@ export const tenantApi = {
   delete: (id: string) => api.delete(`/tenants/${id}`),
 };
 
-// Audits
-export const auditApi = {
-  list: (tenantId: string, limit = 20, offset = 0) =>
-    api.get(`/tenants/${tenantId}/audits`, { params: { limit, offset } }).then((r) => r.data),
-  create: (tenantId: string, name: string) =>
-    api.post(`/tenants/${tenantId}/audits`, { name }).then((r) => r.data),
-  getOne: (tenantId: string, auditId: string) =>
-    api.get(`/tenants/${tenantId}/audits/${auditId}`).then((r) => r.data),
-  getProgress: (tenantId: string, auditId: string) =>
-    api.get(`/tenants/${tenantId}/audits/${auditId}/progress`).then((r) => r.data),
-  run: (tenantId: string, auditId: string) =>
-    api.post(`/tenants/${tenantId}/audits/${auditId}/run`).then((r) => r.data),
-  finalise: (tenantId: string, auditId: string) =>
-    api.post(`/tenants/${tenantId}/audits/${auditId}/finalise`).then((r) => r.data),
-  cancel: (tenantId: string, auditId: string) =>
-    api.post(`/tenants/${tenantId}/audits/${auditId}/cancel`).then((r) => r.data),
-  updateResult: (tenantId: string, auditId: string, controlId: string, data: Record<string, unknown>) =>
-    api.put(`/tenants/${tenantId}/audits/${auditId}/results/${controlId}`, data).then((r) => r.data),
-  listEvidence: (tenantId: string, auditId: string, controlId: string) =>
-    api.get(`/tenants/${tenantId}/audits/${auditId}/results/${controlId}/evidence`).then((r) => r.data),
-  addTextEvidence: (tenantId: string, auditId: string, controlId: string, content: string) =>
-    api.post(`/tenants/${tenantId}/audits/${auditId}/results/${controlId}/evidence/text`, { content }).then((r) => r.data),
-  uploadFileEvidence: (tenantId: string, auditId: string, controlId: string, file: File) => {
-    const form = new FormData();
-    form.append('file', file);
-    return api.post(`/tenants/${tenantId}/audits/${auditId}/results/${controlId}/evidence/file`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }).then((r) => r.data);
-  },
-  downloadEvidence: async (tenantId: string, auditId: string, controlId: string, evidenceId: string, filename: string) => {
-    const res = await api.get(
-      `/tenants/${tenantId}/audits/${auditId}/results/${controlId}/evidence/${evidenceId}/download`,
-      { responseType: 'blob' },
-    );
-    const objectUrl = URL.createObjectURL(res.data as Blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(objectUrl);
-  },
-  listSchedules: (tenantId: string) =>
-    api.get(`/tenants/${tenantId}/schedules`).then((r) => r.data),
-  createSchedule: (tenantId: string, data: Record<string, unknown>) =>
-    api.post(`/tenants/${tenantId}/schedules`, data).then((r) => r.data),
-  deleteSchedule: (tenantId: string, scheduleId: string) =>
-    api.delete(`/tenants/${tenantId}/schedules/${scheduleId}`),
-  runNow: (tenantId: string) =>
-    api.post(`/tenants/${tenantId}/audits/run-now`).then((r) => r.data),
-  getWeeklySchedule: (tenantId: string) =>
-    api.get(`/tenants/${tenantId}/weekly-schedule`).then((r) => r.data),
-  setWeeklySchedule: (tenantId: string, enabled: boolean) =>
-    api.put(`/tenants/${tenantId}/weekly-schedule`, { enabled }).then((r) => r.data),
-};
-
 // Controls
 export const controlApi = {
   list: (params?: Record<string, unknown>) =>
@@ -188,28 +133,6 @@ export const assessmentApi = {
     api.get(`/tenants/${tenantId}/assessments/overdue`).then((r) => r.data),
   summary: (tenantId: string) =>
     api.get(`/tenants/${tenantId}/assessments/summary`).then((r) => r.data),
-};
-
-// Reports
-export const reportApi = {
-  get: (tenantId: string, auditId: string) =>
-    api.get(`/tenants/${tenantId}/reports/${auditId}`).then((r) => r.data),
-  csvUrl: (tenantId: string, auditId: string) =>
-    `${BASE_URL}/tenants/${tenantId}/reports/${auditId}/csv`,
-  pdfUrl: (tenantId: string, auditId: string) =>
-    `${BASE_URL}/tenants/${tenantId}/reports/${auditId}/pdf`,
-  downloadCSV: (tenantId: string, auditId: string) => {
-    const url = reportApi.csvUrl(tenantId, auditId);
-    const link = document.createElement('a');
-    link.href = url;
-    link.click();
-  },
-  downloadPDF: (tenantId: string, auditId: string) => {
-    const url = reportApi.pdfUrl(tenantId, auditId);
-    const link = document.createElement('a');
-    link.href = url;
-    link.click();
-  },
 };
 
 // Settings

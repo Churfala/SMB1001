@@ -5,8 +5,6 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
-import Audits from './pages/Audits';
-import AuditDetail from './pages/AuditDetail';
 import Controls from './pages/Controls';
 import Tenants from './pages/Tenants';
 import Settings from './pages/Settings';
@@ -47,8 +45,6 @@ export default function App() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="audits" element={<Audits />} />
-        <Route path="audits/:auditId" element={<AuditDetail />} />
         <Route path="controls" element={<Controls />} />
         <Route
           path="tenants"
