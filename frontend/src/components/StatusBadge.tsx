@@ -1,5 +1,4 @@
 import React from 'react';
-import type { ResultStatus, AuditStatus } from '../types';
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   pass: { bg: '#dcfce7', color: '#166534', label: 'Pass' },
@@ -23,7 +22,7 @@ const SEVERITY_STYLES: Record<string, { bg: string; color: string }> = {
 };
 
 interface StatusBadgeProps {
-  status: ResultStatus | AuditStatus;
+  status: string;
   size?: 'sm' | 'md';
 }
 
