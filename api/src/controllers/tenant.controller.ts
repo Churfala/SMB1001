@@ -1,8 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { tenantService } from '../services/tenant.service';
-import { integrationService } from '../services/integration.service';
 import { auditLogService } from '../services/audit-log.service';
-import { UserRole, IntegrationType } from '../types';
+import { UserRole } from '../types';
 
 export const tenantController = {
   // ------------------------------------------------------------------
@@ -233,85 +232,4 @@ export const tenantController = {
     return reply.status(204).send();
   },
 
-  // ------------------------------------------------------------------
-  // Integrations
-  // ------------------------------------------------------------------
-  async listIntegrations(request: FastifyRequest, reply: FastifyReply) {
-    const { tenantId } = request.params as { tenantId: string };
-    const integrations = await integrationService.getIntegrations(tenantId);
-    return reply.send({ integrations });
-  },
-
-  async upsertIntegration(request: FastifyRequest, reply: FastifyReply) {
-    const { tenantId } = request.params as { tenantId: string };
-    const { type, client_id, client_secret, access_token, refresh_token, token_expires_at, scopes, metadata } =
-      request.body as {
-        type: IntegrationType;
-        client_id: string;
-        client_secret?: string;
-        access_token?: string;
-        refresh_token?: string;
-        token_expires_at?: string;
-        scopes?: string[];
-        metadata?: Record<string, unknown>;
-      };
-
-    if (!type || !client_id) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'type and client_id are required' });
-    }
-
-    if (type !== 'm365') {
-      return reply.status(400).send({ error: 'Bad Request', message: 'type must be m365' });
-    }
-
-    try {
-      const integration = await integrationService.upsert(tenantId, type, {
-        client_id,
-        client_secret,
-        access_token,
-        refresh_token,
-        token_expires_at: token_expires_at ? new Date(token_expires_at) : undefined,
-        scopes,
-        metadata,
-      });
-      await auditLogService.log({
-        tenantId,
-        userId: request.user.sub,
-        action: 'integration.upserted',
-        resourceType: 'integration',
-        resourceId: integration.id,
-        details: { type },
-      });
-      return reply.status(201).send(integration);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save integration';
-      return reply.status(400).send({ error: 'Bad Request', message });
-    }
-  },
-
-  async deleteIntegration(request: FastifyRequest, reply: FastifyReply) {
-    const { tenantId, integrationId } = request.params as { tenantId: string; integrationId: string };
-
-    await integrationService.delete(tenantId, integrationId);
-    await auditLogService.log({
-      tenantId,
-      userId: request.user.sub,
-      action: 'integration.deleted',
-      resourceType: 'integration',
-      resourceId: integrationId,
-    });
-    return reply.status(204).send();
-  },
-
-  async getSecureScore(request: FastifyRequest, reply: FastifyReply) {
-    const { tenantId } = request.params as { tenantId: string };
-    try {
-      const score = await integrationService.getM365SecureScore(tenantId);
-      if (!score) return reply.status(404).send({ error: 'Not Found', message: 'No M365 integration or score unavailable' });
-      return reply.send(score);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to fetch Secure Score';
-      return reply.status(502).send({ error: 'Bad Gateway', message });
-    }
-  },
 };

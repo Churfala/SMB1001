@@ -1,6 +1,5 @@
 import { Job } from 'bullmq';
-import { query, queryOne } from '../config/database';
-import { m365Service, M365Data } from '../services/m365.service';
+import { query } from '../config/database';
 import { controlEvaluators, EvaluationResult, ResultStatus } from '../evaluators/control.evaluator';
 import pino from 'pino';
 
@@ -38,24 +37,6 @@ export async function processAuditJob(
 
   try {
     await job.updateProgress(5);
-
-    const m365Row = await queryOne<any>('SELECT * FROM integrations WHERE tenant_id = $1 AND type = $2 AND status = $3', [tenantId, 'm365', 'connected']);
-
-    let m365Data: M365Data | null = null;
-
-    if (m365Row) {
-      try {
-        logger.info({ auditId }, 'Collecting M365 data');
-        m365Data = await m365Service.collectData(m365Row as any);
-        await query('UPDATE integrations SET last_sync = NOW(), status = $1, error_message = NULL WHERE id = $2', ['connected', (m365Row as any).id]);
-        logger.info({ auditId, users: m365Data.users.length }, 'M365 data collected');
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Unknown error';
-        logger.error({ err: msg, auditId }, 'M365 data collection failed');
-        await query('UPDATE integrations SET status = $1, error_message = $2 WHERE id = $3', ['error', msg.slice(0, 500), (m365Row as any).id]);
-      }
-    }
-
     await job.updateProgress(50);
 
     const controls = await query<ControlRow>('SELECT * FROM controls WHERE is_active = true ORDER BY control_id');
@@ -70,7 +51,7 @@ export async function processAuditJob(
 
       if (evaluator) {
         try {
-          evalResult = evaluator(m365Data);
+          evalResult = evaluator();
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : 'Unknown error';
           logger.error({ err: msg, controlId: control.control_id }, 'Control evaluation error');

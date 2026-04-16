@@ -90,14 +90,6 @@ export const tenantApi = {
   includeTenant: (tenantId: string, userId: string, targetTenantId: string) =>
     api.delete(`/tenants/${tenantId}/users/${userId}/exclusions/${targetTenantId}`),
   delete: (id: string) => api.delete(`/tenants/${id}`),
-  listIntegrations: (tenantId: string) =>
-    api.get(`/tenants/${tenantId}/integrations`).then((r) => r.data),
-  upsertIntegration: (tenantId: string, data: Record<string, unknown>) =>
-    api.post(`/tenants/${tenantId}/integrations`, data).then((r) => r.data),
-  deleteIntegration: (tenantId: string, integrationId: string) =>
-    api.delete(`/tenants/${tenantId}/integrations/${integrationId}`),
-  getSecureScore: (tenantId: string) =>
-    api.get(`/tenants/${tenantId}/secure-score`).then((r) => r.data),
 };
 
 // Audits

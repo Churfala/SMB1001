@@ -73,36 +73,4 @@ export async function tenantRoutes(app: FastifyInstance) {
     tenantController.includeTenant,
   );
 
-  // ------------------------------------------------------------------
-  // Integrations
-  // ------------------------------------------------------------------
-  app.get(
-    '/:tenantId/integrations',
-    {
-      preHandler: [validateTenantAccess] as any,
-    },
-    tenantController.listIntegrations,
-  );
-
-  app.post(
-    '/:tenantId/integrations',
-    {
-      preHandler: [validateTenantAccess, requireRole('admin')] as any,
-    },
-    tenantController.upsertIntegration,
-  );
-
-  app.delete(
-    '/:tenantId/integrations/:integrationId',
-    {
-      preHandler: [validateTenantAccess, requireRole('admin')] as any,
-    },
-    tenantController.deleteIntegration,
-  );
-
-  app.get(
-    '/:tenantId/secure-score',
-    { preHandler: [validateTenantAccess] as any },
-    tenantController.getSecureScore,
-  );
 }

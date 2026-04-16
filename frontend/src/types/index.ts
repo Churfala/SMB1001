@@ -29,18 +29,6 @@ export interface Tenant {
   created_at: string;
 }
 
-export interface Integration {
-  id: string;
-  tenant_id: string;
-  type: 'm365';
-  client_id: string | null;
-  status: 'pending' | 'connected' | 'error' | 'revoked';
-  scopes: string[];
-  last_sync: string | null;
-  error_message: string | null;
-  token_expires_at: string | null;
-  created_at: string;
-}
 
 export interface Control {
   id: string;

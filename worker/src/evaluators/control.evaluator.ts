@@ -1,5 +1,3 @@
-import type { M365Data } from '../services/m365.service';
-
 export type ResultStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'manual_review';
 
 export interface EvaluationResult {
@@ -9,9 +7,7 @@ export interface EvaluationResult {
   notes: string;
 }
 
-export type EvaluatorFn = (
-  m365Data: M365Data | null,
-) => EvaluationResult;
+export type EvaluatorFn = () => EvaluationResult;
 
 const manual = (notes: string): EvaluationResult => ({
   status: 'manual_review', score: 0, rawData: {}, notes,
@@ -21,19 +17,6 @@ const na = (notes: string): EvaluationResult => ({
   status: 'not_applicable', score: 0, rawData: {}, notes,
 });
 
-/** Detect MFA from M365 authentication methods array */
-function hasMfa(methods: Record<string, unknown>[]): boolean {
-  return methods.some((m) => {
-    const t = String(m['@odata.type'] ?? '');
-    return (
-      t.includes('microsoftAuthenticator') ||
-      t.includes('phoneAuthentication') ||
-      t.includes('fido2') ||
-      t.includes('softwareOath') ||
-      t.includes('windowsHelloForBusiness')
-    );
-  });
-}
 
 export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
@@ -55,32 +38,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.2: Restrict Administrative Privileges
   // -------------------------------------------------------------------
-  ['2.2', (m365) => {
-    if (m365) {
-      const adminIds = new Set<string>();
-      for (const role of m365.adminRoles) {
-        for (const member of (role.members as Record<string, unknown>[] ?? [])) {
-          adminIds.add(String(member.id));
-        }
-      }
-      const total = m365.users.filter((u) => u.accountEnabled).length;
-      const globalAdmin = m365.adminRoles.find((r) => r.displayName === 'Global Administrator');
-      const globalCount = (globalAdmin?.members as unknown[] ?? []).length;
-      const ratio = total > 0 ? adminIds.size / total : 0;
-
-      const status: ResultStatus =
-        globalCount <= 3 && ratio <= 0.05 ? 'pass'
-        : globalCount <= 5 && ratio <= 0.10 ? 'partial'
-        : 'fail';
-      return {
-        status,
-        score: status === 'pass' ? 100 : status === 'partial' ? 60 : 20,
-        rawData: { totalUsers: total, adminCount: adminIds.size, globalAdminCount: globalCount },
-        notes: `${adminIds.size} admin users (${globalCount} Global Admins) out of ${total} active users. SMB1001 requires admin privileges limited to those who need them; Global Admin should be 3–5 maximum.`,
-      };
-    }
-    return na('No M365 integration available. Provide manual evidence of admin privilege restrictions.');
-  }],
+  ['2.2', () => na('Provide manual evidence of admin privilege restrictions: user account listing showing role assignments, confirming admin privileges are limited to those who need them.')],
 
   // -------------------------------------------------------------------
   // 2.3: Individual User Accounts — manual (can't reliably detect shared accounts via API)
@@ -95,77 +53,12 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.5: MFA on All Employee Email Accounts
   // -------------------------------------------------------------------
-  ['2.5', (m365) => {
-    if (m365) {
-      const active = m365.users.filter((u) => u.accountEnabled);
-      if (active.length === 0) return na('No active users found in M365 directory');
-      let withMFA = 0;
-      for (const u of active) {
-        if (hasMfa(m365.mfaMethods.get(String(u.id)) ?? [])) withMFA++;
-      }
-      const pct = Math.round((withMFA / active.length) * 100);
-      return {
-        status: pct >= 98 ? 'pass' : pct >= 85 ? 'partial' : 'fail',
-        score: pct,
-        rawData: { totalUsers: active.length, withMFA },
-        notes: `${withMFA}/${active.length} active M365 users have MFA enrolled (${pct}%). SMB1001 requires MFA on all employee email accounts including administrators.`,
-      };
-    }
-    return na('No M365 integration available. Provide manual evidence of MFA enforcement on all email accounts.');
-  }],
+  ['2.5', () => na('Provide manual evidence of MFA enforcement on all employee email accounts, including administrators.')],
 
   // -------------------------------------------------------------------
   // 2.6: MFA on All Business Applications
   // -------------------------------------------------------------------
-  ['2.6', (m365) => {
-    if (m365) {
-      // Check Security Defaults (covers all users and all apps)
-      const sd = m365.legacyAuthPolicies[0];
-      if (sd?.isEnabled) {
-        return {
-          status: 'pass', score: 100, rawData: sd,
-          notes: 'Microsoft Security Defaults are enabled, enforcing MFA for all users across all Microsoft 365 apps and blocking legacy authentication.',
-        };
-      }
-      // Check for a CA policy requiring MFA for all users / all cloud apps
-      // Accepts: state=enabled (full credit) or state=enabledForReportingButNotEnforced (partial credit)
-      // For user scope: includeUsers contains 'All' OR includeUsers is empty (some tenants omit it when targeting all)
-      const targetsAllUsers = (p: Record<string, unknown>) => {
-        const users = (p.conditions as Record<string, Record<string, string[]>>)?.users ?? {};
-        const inc = users.includeUsers ?? [];
-        return inc.includes('All') || inc.length === 0;
-      };
-      const mfaForAll = m365.conditionalAccessPolicies.filter((p) =>
-        (p.state === 'enabled' || p.state === 'enabledForReportingButNotEnforced') &&
-        ((p.grantControls as Record<string, string[]>)?.builtInControls ?? []).includes('mfa') &&
-        targetsAllUsers(p as Record<string, unknown>),
-      );
-      const mfaEnabled = mfaForAll.filter((p) => p.state === 'enabled');
-      // Check for legacy auth block
-      const legacyBlocked = m365.conditionalAccessPolicies.filter((p) => {
-        const ct = (p.conditions as Record<string, unknown>)?.clientAppTypes as string[] ?? [];
-        const bc = ((p.grantControls as Record<string, unknown>)?.builtInControls as string[] ?? []);
-        return p.state === 'enabled' && (ct.includes('exchangeActiveSync') || ct.includes('other') || ct.includes('mobileAppsAndDesktopClients')) && bc.includes('block');
-      });
-      const hasMfaPolicy = mfaForAll.length > 0;
-      const hasMfaEnforced = mfaEnabled.length > 0;
-      const hasLegacyBlock = legacyBlocked.length > 0;
-      const status: ResultStatus = hasMfaEnforced && hasLegacyBlock ? 'pass'
-        : hasMfaEnforced ? 'partial'
-        : hasMfaPolicy ? 'partial'   // report-only mode: some credit
-        : 'fail';
-      const score = status === 'pass' ? 100 : hasMfaEnforced ? 60 : hasMfaPolicy ? 40 : 0;
-      return {
-        status,
-        score,
-        rawData: { mfaPolicies: mfaForAll.length, mfaEnforcedPolicies: mfaEnabled.length, legacyBlockPolicies: legacyBlocked.length },
-        notes: hasMfaPolicy
-          ? `${mfaForAll.length} Conditional Access policy/policies require MFA for all users${mfaEnabled.length < mfaForAll.length ? ' (some in report-only mode)' : ''}. ${hasLegacyBlock ? 'Legacy authentication is also blocked.' : 'Legacy authentication is NOT blocked — recommend adding a CA block policy for exchangeActiveSync and other legacy clients.'}`
-          : 'No Conditional Access policy requiring MFA for all users found, and Security Defaults are not enabled. Enable Security Defaults or create CA policies to enforce MFA across all business applications.',
-      };
-    }
-    return na('No M365 integration available. Provide manual evidence of MFA enforcement across all business applications.');
-  }],
+  ['2.6', () => na('Provide manual evidence of MFA enforcement across all business applications, including evidence of legacy authentication being blocked.')],
 
   // -------------------------------------------------------------------
   // 2.7: RDP over VPN — manual
@@ -180,34 +73,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.9: MFA Where Important Data Is Stored
   // -------------------------------------------------------------------
-  ['2.9', (m365) => {
-    if (m365) {
-      const sd = m365.legacyAuthPolicies[0];
-      if (sd?.isEnabled) {
-        return { status: 'pass', score: 100, rawData: sd, notes: 'Microsoft Security Defaults enforce MFA for all access including cloud storage services.' };
-      }
-      // Look for CA policies requiring MFA or device compliance for cloud apps
-      // Accept enabled and report-only policies (report-only = partial credit)
-      const dataProtection = m365.conditionalAccessPolicies.filter((p) => {
-        const gc = p.grantControls as Record<string, string[]> ?? {};
-        const controls = gc.builtInControls ?? [];
-        return (p.state === 'enabled' || p.state === 'enabledForReportingButNotEnforced') &&
-          (controls.includes('mfa') || controls.includes('compliantDevice'));
-      });
-      // Device compliance policies
-      const comp = m365.deviceCompliancePolicies.filter((p) => p.state === 'enabled');
-      const hasPolicies = dataProtection.length > 0 || comp.length > 0;
-      return {
-        status: hasPolicies ? 'partial' : 'fail',
-        score: hasPolicies ? 70 : 0,
-        rawData: { caPolicies: dataProtection.length, compliancePolicies: comp.length },
-        notes: hasPolicies
-          ? `${dataProtection.length} CA policies and ${comp.length} device compliance policies provide some protection. Manual verification recommended to confirm all data storage systems require MFA.`
-          : 'No Conditional Access or device compliance policies found protecting cloud data storage. Enable Security Defaults or create CA policies requiring MFA for all cloud app access.',
-      };
-    }
-    return na('No M365 integration available. Provide manual evidence of MFA on all systems storing important digital data.');
-  }],
+  ['2.9', () => na('Provide manual evidence of MFA on all systems storing important digital data.')],
 
   // -------------------------------------------------------------------
   // 2.10: MFA on VPN — manual
@@ -222,31 +88,7 @@ export const controlEvaluators = new Map<string, EvaluatorFn>([
   // -------------------------------------------------------------------
   // 2.12: Email Authentication (SPF, DKIM, DMARC)
   // -------------------------------------------------------------------
-  ['2.12', (m365) => {
-    if (!m365) return na('No M365 integration available. Manually verify SPF, DKIM, and DMARC records for all email-sending domains via DNS lookup tools or your email provider portal.');
-
-    // DKIM check
-    if (m365.dkimSettings.length === 0) {
-      return manual('DKIM settings could not be retrieved. Verify DKIM configuration in the Microsoft Defender portal > Email & Collaboration > Policies > Email authentication settings.');
-    }
-    const dkimEnabled = m365.dkimSettings.filter((d) => d.enabled).length;
-    const dkimTotal = m365.dkimSettings.length;
-    const dkimPct = Math.round((dkimEnabled / dkimTotal) * 100);
-
-    // DMARC and SPF are DNS records — not available via Graph API.
-    // Automated check covers DKIM only. DMARC/SPF require manual evidence upload.
-    const hasDkim = dkimPct === 100;
-    const status: ResultStatus = hasDkim ? 'partial' : 'fail';
-    const score = hasDkim ? 60 : dkimPct > 0 ? 30 : 0;
-
-    const notes = [
-      `DKIM: ${dkimEnabled}/${dkimTotal} domains enabled (automated check).`,
-      !hasDkim && 'Enable DKIM signing for all domains in Microsoft Defender > Email & Collaboration > Policies & Rules > Email authentication settings.',
-      'DMARC and SPF cannot be verified via the M365 API. Upload DNS records or a third-party email authentication report as evidence to achieve a full pass for this control.',
-    ].filter(Boolean).join(' ');
-
-    return { status, score, rawData: { dkimEnabled, dkimTotal }, notes };
-  }],
+  ['2.12', () => na('Manually verify SPF, DKIM, and DMARC records for all email-sending domains via DNS lookup tools or your email provider portal.')],
 
   // -------------------------------------------------------------------
   // DOMAIN 3: BACKUP AND RECOVERY — manual
