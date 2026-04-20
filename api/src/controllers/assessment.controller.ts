@@ -78,7 +78,7 @@ export const assessmentController = {
          review_date = EXCLUDED.review_date,
          reviewed_by = EXCLUDED.reviewed_by,
          updated_at  = NOW()
-       RETURNING *`,
+       RETURNING id, tenant_id, control_id, status, notes, review_date::text, reviewed_by, created_at, updated_at`,
       [tenantId, control.id, status, notes, reviewDate, request.user.sub],
     );
 

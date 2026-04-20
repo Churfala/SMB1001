@@ -92,6 +92,11 @@ export default function Controls() {
   const openDrawer = async (control: Control) => {
     setSelectedControl(control);
     const existing = assessmentMap.get(control.id);
+    const defaultReviewDate = (() => {
+      const d = new Date();
+      d.setFullYear(d.getFullYear() + 1);
+      return d.toISOString().slice(0, 10);
+    })();
     setDrawerAssessment(existing ?? {
       control_db_id: control.id,
       control_id: control.control_id,
@@ -101,7 +106,7 @@ export default function Controls() {
       assessment_id: null,
       status: 'not_assessed',
       notes: null,
-      review_date: null,
+      review_date: defaultReviewDate,
       reviewed_by: null,
     });
     setDrawerOpen(true);
