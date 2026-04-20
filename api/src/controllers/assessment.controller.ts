@@ -6,7 +6,7 @@ import { env } from '../config/env';
 
 export const assessmentController = {
   // GET /tenants/:tenantId/assessments
-  // Returns all 39 controls joined with this tenant's assessment data (null fields if not yet assessed)
+  // Returns all controls for the tenant's framework joined with this tenant's assessment data
   async list(request: FastifyRequest, reply: FastifyReply) {
     const { tenantId } = request.params as { tenantId: string };
 
@@ -34,9 +34,11 @@ export const assessmentController = {
          a.review_date::text,
          a.reviewed_by
        FROM controls c
+       JOIN tenants t ON t.id = $1
        LEFT JOIN control_assessments a
          ON a.control_id = c.id AND a.tenant_id = $1
        WHERE c.is_active = true
+         AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))
        ORDER BY
          SPLIT_PART(c.control_id, '.', 1)::INTEGER,
          SPLIT_PART(c.control_id, '.', 2)::INTEGER`,
@@ -60,8 +62,11 @@ export const assessmentController = {
     const control = await queryOne<{ id: string }>(
       isUUID
         ? 'SELECT id FROM controls WHERE id = $1'
-        : 'SELECT id FROM controls WHERE control_id = $1',
-      [controlId],
+        : `SELECT c.id FROM controls c
+           JOIN tenants t ON t.id = $2
+           WHERE c.control_id = $1
+             AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))`,
+      isUUID ? [controlId] : [controlId, tenantId],
     );
     if (!control) return reply.status(404).send({ error: 'Not Found', message: 'Control not found' });
 
@@ -104,8 +109,10 @@ export const assessmentController = {
            COUNT(*)                                                                         AS total,
            COUNT(*) FILTER (WHERE a.review_date IS NOT NULL AND a.review_date < CURRENT_DATE) AS overdue
          FROM controls c
+         JOIN tenants t ON t.id = $1
          LEFT JOIN control_assessments a ON a.control_id = c.id AND a.tenant_id = $1
-         WHERE c.is_active = true`,
+         WHERE c.is_active = true
+           AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))`,
         [tenantId],
       ),
       queryOne<{ id: string; score: number | null; summary: Record<string, unknown>; completed_at: string }>(
@@ -131,7 +138,13 @@ export const assessmentController = {
   async overdueCount(request: FastifyRequest, reply: FastifyReply) {
     const { tenantId } = request.params as { tenantId: string };
     const row = await queryOne<{ count: number }>(
-      `SELECT COUNT(*)::int AS count FROM control_assessments WHERE tenant_id = $1 AND review_date < CURRENT_DATE`,
+      `SELECT COUNT(*)::int AS count
+       FROM control_assessments a
+       JOIN controls c ON c.id = a.control_id
+       JOIN tenants t ON t.id = $1
+       WHERE a.tenant_id = $1
+         AND a.review_date < CURRENT_DATE
+         AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))`,
       [tenantId],
     );
     return reply.send({ count: row?.count ?? 0 });
@@ -145,8 +158,11 @@ export const assessmentController = {
     const control = await queryOne<{ id: string }>(
       isUUID
         ? 'SELECT id FROM controls WHERE id = $1'
-        : 'SELECT id FROM controls WHERE control_id = $1',
-      [controlId],
+        : `SELECT c.id FROM controls c
+           JOIN tenants t ON t.id = $2
+           WHERE c.control_id = $1
+             AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))`,
+      isUUID ? [controlId] : [controlId, tenantId],
     );
     if (!control) return reply.status(404).send({ error: 'Not Found', message: 'Control not found' });
 
@@ -184,8 +200,11 @@ export const assessmentController = {
     const control = await queryOne<{ id: string }>(
       isUUID
         ? 'SELECT id FROM controls WHERE id = $1'
-        : 'SELECT id FROM controls WHERE control_id = $1',
-      [controlId],
+        : `SELECT c.id FROM controls c
+           JOIN tenants t ON t.id = $2
+           WHERE c.control_id = $1
+             AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))`,
+      isUUID ? [controlId] : [controlId, tenantId],
     );
     if (!control) return reply.status(404).send({ error: 'Not Found', message: 'Control not found' });
 
@@ -239,8 +258,11 @@ export const assessmentController = {
     const control = await queryOne<{ id: string }>(
       isUUID
         ? 'SELECT id FROM controls WHERE id = $1'
-        : 'SELECT id FROM controls WHERE control_id = $1',
-      [controlId],
+        : `SELECT c.id FROM controls c
+           JOIN tenants t ON t.id = $2
+           WHERE c.control_id = $1
+             AND c.framework_id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))`,
+      isUUID ? [controlId] : [controlId, tenantId],
     );
     if (!control) return reply.status(404).send({ error: 'Not Found', message: 'Control not found' });
 

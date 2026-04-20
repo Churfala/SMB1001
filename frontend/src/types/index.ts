@@ -19,12 +19,26 @@ export interface AuthState {
   refreshToken: string | null;
 }
 
+export interface TierInfo {
+  tier: number;
+  name: string;
+  color: string;
+  bg: string;
+  maxControls: number;
+}
+
 export interface Tenant {
   id: string;
   name: string;
   slug: string;
   status: string;
   created_at: string;
+  framework_id: string | null;
+  resolved_framework_id: string;
+  framework_code: string;
+  framework_name: string;
+  framework_tier_config: TierInfo[];
+  framework_domain_label: string;
 }
 
 
@@ -41,6 +55,7 @@ export interface Control {
   evidence_requirements: string | null;
   remediation_guidance: string | null;
   references: string[];
+  framework_id: string;
 }
 
 export type AssessmentStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'not_assessed';

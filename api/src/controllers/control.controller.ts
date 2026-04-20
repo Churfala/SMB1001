@@ -4,10 +4,11 @@ import { Control } from '../types';
 
 export const controlController = {
   async list(request: FastifyRequest, reply: FastifyReply) {
-    const { category, severity, validationType, limit = 100, offset = 0 } = request.query as {
+    const { category, severity, validationType, frameworkId, limit = 100, offset = 0 } = request.query as {
       category?: string;
       severity?: string;
       validationType?: string;
+      frameworkId?: string;
       limit?: number;
       offset?: number;
     };
@@ -16,6 +17,7 @@ export const controlController = {
     const values: unknown[] = [];
     let i = 1;
 
+    if (frameworkId) { conditions.push(`framework_id = $${i++}`); values.push(frameworkId); }
     if (category) { conditions.push(`category = $${i++}`); values.push(category); }
     if (severity) { conditions.push(`severity = $${i++}`); values.push(severity); }
     if (validationType) { conditions.push(`validation_type = $${i++}`); values.push(validationType); }
@@ -35,6 +37,7 @@ export const controlController = {
     const countValues: unknown[] = [];
     let ci = 1;
     const countConditions: string[] = ['is_active = true'];
+    if (frameworkId) { countConditions.push(`framework_id = $${ci++}`); countValues.push(frameworkId); }
     if (category) { countConditions.push(`category = $${ci++}`); countValues.push(category); }
     if (severity) { countConditions.push(`severity = $${ci++}`); countValues.push(severity); }
     if (validationType) { countConditions.push(`validation_type = $${ci++}`); countValues.push(validationType); }
@@ -44,9 +47,13 @@ export const controlController = {
       countValues,
     );
 
-    // Return distinct categories for filtering
+    // Return distinct categories scoped to the same framework filter
+    const catValues: unknown[] = [];
+    const catConditions: string[] = ['is_active = true'];
+    if (frameworkId) { catConditions.push(`framework_id = $1`); catValues.push(frameworkId); }
     const categories = await query<{ category: string }>(
-      'SELECT DISTINCT category FROM controls WHERE is_active = true ORDER BY category',
+      `SELECT DISTINCT category FROM controls WHERE ${catConditions.join(' AND ')} ORDER BY category`,
+      catValues,
     );
 
     return reply.send({
@@ -59,11 +66,24 @@ export const controlController = {
   async getOne(request: FastifyRequest, reply: FastifyReply) {
     const { id } = request.params as { id: string };
 
-    // Accept either UUID or control_id string (e.g. "IAM-001")
+    // Accept either UUID or control_id string (e.g. "1.1").
+    // For string lookups, frameworkId param is required to disambiguate when multiple
+    // frameworks use the same control_id.
     const isUUID = /^[0-9a-f-]{36}$/.test(id);
-    const control = isUUID
-      ? await queryOne<Control>('SELECT * FROM controls WHERE id = $1', [id])
-      : await queryOne<Control>('SELECT * FROM controls WHERE control_id = $1', [id]);
+    let control: Control | null;
+    if (isUUID) {
+      control = await queryOne<Control>('SELECT * FROM controls WHERE id = $1', [id]);
+    } else {
+      const { frameworkId } = request.query as { frameworkId?: string };
+      if (frameworkId) {
+        control = await queryOne<Control>(
+          'SELECT * FROM controls WHERE control_id = $1 AND framework_id = $2',
+          [id, frameworkId],
+        );
+      } else {
+        control = await queryOne<Control>('SELECT * FROM controls WHERE control_id = $1 LIMIT 1', [id]);
+      }
+    }
 
     if (!control) return reply.status(404).send({ error: 'Control not found' });
     return reply.send(control);

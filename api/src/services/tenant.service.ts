@@ -2,10 +2,25 @@ import { query, queryOne } from '../config/database';
 import { Tenant, User, UserRole } from '../types';
 import { authService } from './auth.service';
 
+// Reusable fragment: JOIN frameworks so every tenant row includes resolved framework metadata.
+// NULL framework_id defaults to SMB1001:2026.
+// resolved_framework_id is always the live framework UUID (never null).
+const TENANT_WITH_FRAMEWORK = `
+  SELECT t.*,
+         f.id           AS resolved_framework_id,
+         f.code         AS framework_code,
+         f.name         AS framework_name,
+         f.tier_config  AS framework_tier_config,
+         f.domain_label AS framework_domain_label
+  FROM tenants t
+  LEFT JOIN frameworks f
+    ON f.id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))
+`;
+
 export const tenantService = {
   async list(limit = 50, offset = 0): Promise<{ tenants: Tenant[]; total: number }> {
     const tenants = await query<Tenant>(
-      'SELECT * FROM tenants ORDER BY created_at DESC LIMIT $1 OFFSET $2',
+      `${TENANT_WITH_FRAMEWORK} ORDER BY t.created_at DESC LIMIT $1 OFFSET $2`,
       [limit, offset],
     );
     const count = await queryOne<{ count: string }>('SELECT COUNT(*)::text FROM tenants');
@@ -13,26 +28,29 @@ export const tenantService = {
   },
 
   async getById(id: string): Promise<Tenant | null> {
-    return queryOne<Tenant>('SELECT * FROM tenants WHERE id = $1', [id]);
+    return queryOne<Tenant>(`${TENANT_WITH_FRAMEWORK} WHERE t.id = $1`, [id]);
   },
 
   async getBySlug(slug: string): Promise<Tenant | null> {
-    return queryOne<Tenant>('SELECT * FROM tenants WHERE slug = $1', [slug]);
+    return queryOne<Tenant>(`${TENANT_WITH_FRAMEWORK} WHERE t.slug = $1`, [slug]);
   },
 
   async create(name: string, slug: string): Promise<Tenant> {
     const existing = await queryOne('SELECT id FROM tenants WHERE slug = $1', [slug]);
     if (existing) throw new Error(`Slug "${slug}" is already taken`);
 
-    const tenant = await queryOne<Tenant>(
-      'INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING *',
+    const row = await queryOne<{ id: string }>(
+      'INSERT INTO tenants (name, slug) VALUES ($1, $2) RETURNING id',
       [name, slug],
     );
-    if (!tenant) throw new Error('Failed to create tenant');
+    if (!row) throw new Error('Failed to create tenant');
+    // Re-fetch with framework JOIN so the response includes resolved framework fields
+    const tenant = await tenantService.getById(row.id);
+    if (!tenant) throw new Error('Tenant not found after create');
     return tenant;
   },
 
-  async update(id: string, updates: { name?: string; status?: string; settings?: Record<string, unknown> }): Promise<Tenant> {
+  async update(id: string, updates: { name?: string; status?: string; settings?: Record<string, unknown>; framework_id?: string | null }): Promise<Tenant> {
     const fields: string[] = [];
     const values: unknown[] = [];
     let i = 1;
@@ -40,15 +58,20 @@ export const tenantService = {
     if (updates.name !== undefined) { fields.push(`name = $${i++}`); values.push(updates.name); }
     if (updates.status !== undefined) { fields.push(`status = $${i++}`); values.push(updates.status); }
     if (updates.settings !== undefined) { fields.push(`settings = $${i++}`); values.push(JSON.stringify(updates.settings)); }
+    if (updates.framework_id !== undefined) { fields.push(`framework_id = $${i++}`); values.push(updates.framework_id); }
 
     if (fields.length === 0) throw new Error('No fields to update');
 
     values.push(id);
-    const tenant = await queryOne<Tenant>(
-      `UPDATE tenants SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${i} RETURNING *`,
+    const updated = await queryOne<{ id: string }>(
+      `UPDATE tenants SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${i} RETURNING id`,
       values,
     );
-    if (!tenant) throw new Error('Tenant not found');
+    if (!updated) throw new Error('Tenant not found');
+
+    // Re-fetch with framework JOIN so the response includes resolved framework fields
+    const tenant = await tenantService.getById(id);
+    if (!tenant) throw new Error('Tenant not found after update');
     return tenant;
   },
 
@@ -57,8 +80,15 @@ export const tenantService = {
   /** Return all non-suspended tenants except those explicitly excluded for this user. */
   async listForUser(userId: string): Promise<Tenant[]> {
     return query<Tenant>(
-      `SELECT t.*
+      `SELECT t.*,
+              f.id           AS resolved_framework_id,
+              f.code         AS framework_code,
+              f.name         AS framework_name,
+              f.tier_config  AS framework_tier_config,
+              f.domain_label AS framework_domain_label
        FROM tenants t
+       LEFT JOIN frameworks f
+         ON f.id = COALESCE(t.framework_id, (SELECT id FROM frameworks WHERE code = 'SMB1001:2026'))
        WHERE t.status != 'suspended'
          AND NOT EXISTS (
            SELECT 1 FROM user_tenant_exclusions

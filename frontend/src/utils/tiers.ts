@@ -1,10 +1,6 @@
-export interface TierInfo {
-  tier: number;
-  name: string;
-  color: string;
-  bg: string;
-  maxControls: number;
-}
+import type { TierInfo } from '../types';
+
+export type { TierInfo };
 
 export const TIERS: TierInfo[] = [
   { tier: 1, name: 'Bronze',   color: '#92400e', bg: '#fef3c7', maxControls: 7  },
@@ -14,6 +10,6 @@ export const TIERS: TierInfo[] = [
   { tier: 5, name: 'Diamond',  color: '#5b21b6', bg: '#ede9fe', maxControls: 39 },
 ];
 
-export function tierInfo(tier: number): TierInfo {
-  return TIERS.find((t) => t.tier === tier) ?? TIERS[0];
+export function tierInfo(tier: number, tiers: TierInfo[] = TIERS): TierInfo {
+  return tiers.find((t) => t.tier === tier) ?? tiers[0];
 }

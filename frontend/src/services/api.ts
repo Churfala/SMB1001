@@ -135,6 +135,11 @@ export const assessmentApi = {
     api.get(`/tenants/${tenantId}/assessments/summary`).then((r) => r.data),
 };
 
+// Frameworks
+export const frameworkApi = {
+  list: () => api.get('/frameworks').then((r) => r.data),
+};
+
 // Settings
 export const settingsApi = {
   getSsoPublic: () => api.get('/settings/sso/public').then((r) => r.data),

@@ -1,26 +1,17 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { controlApi, assessmentApi } from '../services/api';
 import { useTenant } from '../contexts/TenantContext';
 import { useAuth } from '../contexts/AuthContext';
-import type { Control, Assessment, AssessmentEvidence, AssessmentStatus } from '../types';
+import type { Control, Assessment, AssessmentEvidence, AssessmentStatus, TierInfo } from '../types';
 import { TIERS, tierInfo } from '../utils/tiers';
 
-// Domain display order
-const DOMAIN_ORDER = [
-  'Technology Management',
-  'Access Management',
-  'Backup and Recovery',
-  'Policies, Processes and Plans',
-  'Education and Training',
+// Colour palette for dynamically generated domain groups (cycles if > 18 groups)
+const DOMAIN_PALETTE = [
+  '#2563eb', '#7c3aed', '#059669', '#d97706', '#db2777',
+  '#0891b2', '#dc2626', '#65a30d', '#9333ea', '#ea580c',
+  '#0d9488', '#4f46e5', '#b45309', '#be185d', '#1d4ed8',
+  '#15803d', '#c2410c', '#7e22ce',
 ];
-
-const DOMAIN_COLORS: Record<string, string> = {
-  'Technology Management':         '#2563eb',
-  'Access Management':             '#7c3aed',
-  'Backup and Recovery':           '#059669',
-  'Policies, Processes and Plans': '#d97706',
-  'Education and Training':        '#db2777',
-};
 
 const STATUS_LABELS: Record<string, string> = {
   not_assessed:   'Not Assessed',
@@ -72,7 +63,7 @@ export default function Controls() {
     setLoading(true);
     try {
       const [ctrlData, asmData] = await Promise.all([
-        controlApi.list({ limit: 100 }),
+        controlApi.list({ limit: 300, frameworkId: currentTenant.resolved_framework_id }),
         assessmentApi.list(currentTenant.id),
       ]);
       setControls(ctrlData.controls ?? []);
@@ -84,9 +75,12 @@ export default function Controls() {
     } finally {
       setLoading(false);
     }
-  }, [currentTenant?.id]);
+  }, [currentTenant?.id, currentTenant?.resolved_framework_id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Reset tier filter when framework changes (tiers differ between frameworks)
+  useEffect(() => { setSelectedTier(null); }, [currentTenant?.resolved_framework_id]);
 
   // ── Open drawer ──────────────────────────────────────────────────────
   const openDrawer = async (control: Control) => {
@@ -184,15 +178,28 @@ export default function Controls() {
     }
   };
 
-  // ── Group controls by domain (respecting tier filter) ───────────────
+  // ── Framework-aware tier config ──────────────────────────────────────
+  const frameworkTiers: TierInfo[] = (currentTenant?.framework_tier_config?.length)
+    ? currentTenant.framework_tier_config
+    : TIERS;
+  const domainLabel = currentTenant?.framework_domain_label ?? 'Domain';
+
+  // ── Dynamic domain list derived from loaded controls ─────────────────
+  const sortedDomains = useMemo(
+    () => [...new Set(controls.map((c) => c.category))].sort(),
+    [controls],
+  );
+  const domainColor = (domain: string): string =>
+    DOMAIN_PALETTE[sortedDomains.indexOf(domain) % DOMAIN_PALETTE.length];
+
+  // ── Group controls by domain (respecting tier filter) ────────────────
   const visibleControls = selectedTier === null
     ? controls
     : controls.filter((c) => c.tier <= selectedTier);
 
-  const grouped = DOMAIN_ORDER.map((domain) => ({
-    domain,
-    controls: visibleControls.filter((c) => c.category === domain),
-  })).filter((g) => g.controls.length > 0);
+  const grouped = sortedDomains
+    .map((domain) => ({ domain, controls: visibleControls.filter((c) => c.category === domain) }))
+    .filter((g) => g.controls.length > 0);
 
   if (loading) {
     return (
@@ -208,7 +215,7 @@ export default function Controls() {
       <div style={{ marginBottom: 16 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Controls</h1>
         <p style={{ fontSize: 13, color: '#6b7280', margin: '4px 0 0' }}>
-          SMB1001:2026 compliance register — {controls.length} controls across {grouped.length} domains
+          {currentTenant?.framework_name ?? 'SMB1001:2026'} compliance register — {controls.length} controls across {grouped.length} {domainLabel.toLowerCase()}{grouped.length !== 1 ? 's' : ''}
         </p>
       </div>
 
@@ -226,7 +233,7 @@ export default function Controls() {
         >
           All
         </button>
-        {TIERS.map((t) => (
+        {frameworkTiers.map((t) => (
           <button
             key={t.tier}
             onClick={() => setSelectedTier(selectedTier === t.tier ? null : t.tier)}
@@ -238,14 +245,14 @@ export default function Controls() {
               transition: 'all 0.15s',
             }}
           >
-            {t.tier === 3 ? `★ ${t.name}` : t.name}
+            {t.name}
           </button>
         ))}
       </div>
 
       {/* Domain sections */}
       {grouped.map(({ domain, controls: domainControls }) => {
-        const color = DOMAIN_COLORS[domain] ?? '#2563eb';
+        const color = domainColor(domain);
         const passCount = domainControls.filter((c) => assessmentMap.get(c.id)?.status === 'pass').length;
         return (
           <div key={domain} style={{ marginBottom: 32 }}>
@@ -296,7 +303,7 @@ export default function Controls() {
                       }}>
                         {control.control_id}
                       </span>
-                      {(() => { const ti = tierInfo(control.tier); return (
+                      {(() => { const ti = tierInfo(control.tier, frameworkTiers); return (
                         <span style={{
                           fontSize: 10, fontWeight: 600, color: ti.color,
                           backgroundColor: ti.bg, borderRadius: 4,
@@ -377,6 +384,8 @@ export default function Controls() {
             textInput={textInput}
             saving={saving}
             canEdit={canEdit}
+            frameworkTiers={frameworkTiers}
+            domainColor={domainColor}
             onClose={closeDrawer}
             onSaveField={saveField}
             onTextInputChange={setTextInput}
@@ -415,6 +424,8 @@ interface DrawerProps {
   textInput: string;
   saving: boolean;
   canEdit: boolean;
+  frameworkTiers: TierInfo[];
+  domainColor: (category: string) => string;
   onClose: () => void;
   onSaveField: (field: 'status' | 'notes' | 'review_date', value: string | null) => void;
   onTextInputChange: (v: string) => void;
@@ -425,9 +436,9 @@ interface DrawerProps {
 
 function DrawerContent({
   control, assessment, evidence, evidenceLoading, textInput,
-  saving, canEdit, onClose, onSaveField, onTextInputChange, onAddText, onDownloadEvidence, fileInputRef,
+  saving, canEdit, frameworkTiers, domainColor, onClose, onSaveField, onTextInputChange, onAddText, onDownloadEvidence, fileInputRef,
 }: DrawerProps) {
-  const color = DOMAIN_COLORS[control.category] ?? '#2563eb';
+  const color = domainColor(control.category);
   const overdue = isOverdue(assessment?.review_date ?? null);
   const [localNotes, setLocalNotes] = useState(assessment?.notes ?? '');
 
@@ -448,7 +459,7 @@ function DrawerContent({
               }}>
                 {control.control_id}
               </span>
-              {(() => { const ti = tierInfo(control.tier); return (
+              {(() => { const ti = tierInfo(control.tier, frameworkTiers); return (
                 <span style={{ fontSize: 11, fontWeight: 600, color: ti.color, backgroundColor: ti.bg, borderRadius: 4, padding: '2px 6px' }}>
                   {ti.name}
                 </span>

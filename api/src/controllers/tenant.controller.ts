@@ -55,7 +55,7 @@ export const tenantController = {
 
   async update(request: FastifyRequest, reply: FastifyReply) {
     const { id } = request.params as { id: string };
-    const body = request.body as { name?: string; status?: string; settings?: Record<string, unknown> };
+    const body = request.body as { name?: string; status?: string; settings?: Record<string, unknown>; framework_id?: string | null };
 
     try {
       const tenant = await tenantService.update(id, body);

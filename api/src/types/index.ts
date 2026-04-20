@@ -8,14 +8,33 @@ export type ResultStatus = 'pass' | 'fail' | 'partial' | 'not_applicable' | 'man
 export type EvidenceType = 'text' | 'file';
 export type IntegrationStatus = 'pending' | 'connected' | 'error' | 'revoked';
 
+export interface Framework {
+  id: string;
+  code: string;
+  name: string;
+  version: string | null;
+  description: string | null;
+  tier_config: object[];
+  domain_label: string;
+  is_active: boolean;
+  created_at: Date;
+}
+
 export interface Tenant {
   id: string;
   name: string;
   slug: string;
   status: string;
   settings: Record<string, unknown>;
+  framework_id: string | null;
   created_at: Date;
   updated_at: Date;
+  // Joined from frameworks table (always resolved — never null)
+  resolved_framework_id: string;
+  framework_code: string;
+  framework_name: string;
+  framework_tier_config: object[];
+  framework_domain_label: string;
 }
 
 export interface User {
@@ -57,11 +76,13 @@ export interface Control {
   description: string;
   category: string;
   severity: ControlSeverity;
+  tier: number;
   validation_type: ValidationType;
   integration_type: IntegrationScopeType | null;
   evidence_requirements: string | null;
   remediation_guidance: string | null;
   references: string[];
+  framework_id: string;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;

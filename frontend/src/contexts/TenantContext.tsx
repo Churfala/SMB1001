@@ -31,7 +31,7 @@ export function TenantProvider({ children }: { children: React.ReactNode }) {
       setTenants(accessible);
       const saved = localStorage.getItem('currentTenantId');
       const found = accessible.find((t: Tenant) => t.id === saved) ?? accessible[0] ?? null;
-      if (found && !currentTenant) setCurrentTenantState(found);
+      if (found) setCurrentTenantState(found);
     } catch (err) {
       console.error('Failed to load tenants:', err);
     } finally {

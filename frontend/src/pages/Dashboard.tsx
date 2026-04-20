@@ -63,7 +63,7 @@ export default function Dashboard() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', margin: 0 }}>Dashboard</h1>
         <p style={{ fontSize: 14, color: '#6b7280', margin: '4px 0 0' }}>
-          {totalClients} client{totalClients !== 1 ? 's' : ''} · SMB1001:2026 compliance register
+          {totalClients} client{totalClients !== 1 ? 's' : ''} · compliance register
           {totalOverdue > 0 && (
             <span style={{ color: '#dc2626', fontWeight: 600, marginLeft: 12 }}>
               ⚠ {totalOverdue} overdue review{totalOverdue !== 1 ? 's' : ''}

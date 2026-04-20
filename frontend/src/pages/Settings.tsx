@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
-import { authApi, settingsApi, tenantApi } from '../services/api';
+import { authApi, frameworkApi, settingsApi, tenantApi } from '../services/api';
 import type { Tenant, UserRole } from '../types';
+
+interface FrameworkOption {
+  id: string;
+  code: string;
+  name: string;
+}
 
 type Tab = 'profile' | 'users' | 'sso';
 
@@ -169,7 +175,7 @@ interface TenantUser {
 
 export default function Settings() {
   const { user } = useAuth();
-  const { currentTenant } = useTenant();
+  const { currentTenant, reload } = useTenant();
   const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('profile');
 
@@ -177,6 +183,29 @@ export default function Settings() {
   useEffect(() => {
     if (!isAdmin && (tab === 'users' || tab === 'sso')) setTab('profile');
   }, [isAdmin, tab]);
+
+  // ── Framework selector ────────────────────────────────────────────────────
+  const [frameworks, setFrameworks] = useState<FrameworkOption[]>([]);
+  const [frameworkSaving, setFrameworkSaving] = useState(false);
+  const [frameworkMsg, setFrameworkMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    frameworkApi.list().then((d) => setFrameworks(d.frameworks ?? [])).catch(() => {});
+  }, []);
+
+  const handleFrameworkChange = async (frameworkId: string) => {
+    if (!currentTenant || !isAdmin) return;
+    setFrameworkSaving(true);
+    setFrameworkMsg(null);
+    try {
+      await tenantApi.update(currentTenant.id, { framework_id: frameworkId });
+      reload();
+      setFrameworkMsg({ ok: true, text: 'Framework updated — controls page will now show the selected framework.' });
+    } catch {
+      setFrameworkMsg({ ok: false, text: 'Failed to update framework.' });
+    } finally {
+      setFrameworkSaving(false); }
+  };
 
   // ── Profile ──────────────────────────────────────────────────────────────
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
@@ -419,6 +448,43 @@ export default function Settings() {
             <div style={{ fontSize: 12, fontWeight: 500, color: '#6b7280', marginBottom: 2 }}>Role</div>
             <div style={{ fontSize: 14, color: '#111827', textTransform: 'capitalize' }}>{user?.role}</div>
           </div>
+          {isAdmin && currentTenant && frameworks.length > 0 && (
+            <>
+              <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '0 0 20px' }} />
+              <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 6px' }}>Compliance Framework</h2>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 12px', lineHeight: 1.5 }}>
+                Select the compliance framework for <strong>{currentTenant.name}</strong>. Switching frameworks changes which controls appear in the compliance register. Existing assessments are not deleted.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: frameworkMsg ? 10 : 0 }}>
+                {frameworks.map((fw) => {
+                  const isSelected = currentTenant.resolved_framework_id === fw.id;
+                  return (
+                    <button
+                      key={fw.id}
+                      type="button"
+                      disabled={frameworkSaving}
+                      onClick={() => handleFrameworkChange(fw.id)}
+                      style={{
+                        padding: '7px 16px', fontSize: 13, borderRadius: 7, cursor: frameworkSaving ? 'not-allowed' : 'pointer',
+                        border: isSelected ? '2px solid #2563eb' : '1px solid #d1d5db',
+                        backgroundColor: isSelected ? '#eff6ff' : '#fff',
+                        color: isSelected ? '#1d4ed8' : '#374151',
+                        fontWeight: isSelected ? 600 : 400,
+                      }}
+                    >
+                      {fw.name}
+                    </button>
+                  );
+                })}
+              </div>
+              {frameworkMsg && (
+                <div style={{ backgroundColor: frameworkMsg.ok ? '#dcfce7' : '#fee2e2', color: frameworkMsg.ok ? '#16a34a' : '#991b1b', padding: '8px 12px', borderRadius: 6, fontSize: 13, marginBottom: 4 }}>
+                  {frameworkMsg.text}
+                </div>
+              )}
+            </>
+          )}
+
           {user?.has_password !== false && (
             <>
               <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '0 0 20px' }} />
