@@ -37,6 +37,14 @@ export const env = {
   ENTRA_SSO_TENANT_SLUG: process.env.ENTRA_SSO_TENANT_SLUG || 'msp-admin',
   ENTRA_AUTO_PROVISION: process.env.ENTRA_AUTO_PROVISION !== 'false',
 
+  // SMTP (optional — email sends are no-ops if SMTP_HOST is not set)
+  SMTP_HOST:     process.env.SMTP_HOST     || '',
+  SMTP_PORT:     parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_SECURE:   process.env.SMTP_SECURE   === 'true',
+  SMTP_USER:     process.env.SMTP_USER     || '',
+  SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
+  SMTP_FROM:     process.env.SMTP_FROM     || 'ControlCheck <noreply@controlcheck.app>',
+
   // Frontend URL (for SSO redirects)
   FRONTEND_URL: process.env.FRONTEND_URL ||
     (process.env.NODE_ENV === 'production' ? 'https://controlcheck.globaltechnology.nz' : 'http://localhost:5173'),

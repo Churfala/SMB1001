@@ -28,7 +28,8 @@
     "uuid": "^9.0.1",
     "dotenv": "^16.4.5",
     "cronstrue": "^2.50.0",
-    "node-cron": "^3.0.3"
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.13"
   },
   "devDependencies": {
     "typescript": "^5.4.2",
@@ -38,6 +39,7 @@
     "@types/bcrypt": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/uuid": "^9.0.8",
-    "@types/pdfmake": "^0.2.9"
+    "@types/pdfmake": "^0.2.9",
+    "@types/nodemailer": "^6.4.14"
   }
 }

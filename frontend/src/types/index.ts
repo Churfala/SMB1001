@@ -85,4 +85,40 @@ export interface AssessmentEvidence {
   created_at: string;
 }
 
+export type TaskStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type TaskPriority = 'critical' | 'high' | 'medium' | 'low';
+
+export interface Task {
+  id: string;
+  tenant_id: string;
+  control_id: string | null;
+  control_ref: string | null;
+  control_code: string | null;   // joined from controls table
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  assigned_to: string | null;
+  assigned_to_email: string | null;
+  assigned_to_name: string | null;
+  due_date: string | null;
+  created_by: string;
+  created_by_email: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  resolution_notes: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  details: Record<string, unknown>;
+  ip_address: string | null;
+  user_email: string | null;
+  user_name: string | null;
+  created_at: string;
+}
 

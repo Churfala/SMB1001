@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
-import { authApi, frameworkApi, settingsApi, tenantApi } from '../services/api';
+import { auditLogApi, authApi, frameworkApi, settingsApi, tenantApi } from '../services/api';
+import type { AuditLogEntry } from '../types';
 import type { Tenant, UserRole } from '../types';
 
 interface FrameworkOption {
@@ -10,7 +11,7 @@ interface FrameworkOption {
   name: string;
 }
 
-type Tab = 'profile' | 'users' | 'sso';
+type Tab = 'profile' | 'users' | 'sso' | 'activity';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 const suggestedCallback = `${API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE}/auth/sso/callback`;
@@ -181,8 +182,24 @@ export default function Settings() {
 
   // Redirect non-admins away from admin tabs
   useEffect(() => {
-    if (!isAdmin && (tab === 'users' || tab === 'sso')) setTab('profile');
+    if (!isAdmin && (tab === 'users' || tab === 'sso' || tab === 'activity')) setTab('profile');
   }, [isAdmin, tab]);
+
+  // ── Activity log ─────────────────────────────────────────────────────────
+  const [activityLogs, setActivityLogs]   = useState<AuditLogEntry[]>([]);
+  const [activityTotal, setActivityTotal] = useState(0);
+  const [activityPage, setActivityPage]   = useState(0);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const ACTIVITY_PAGE_SIZE = 50;
+
+  useEffect(() => {
+    if (tab !== 'activity' || !currentTenant) return;
+    setActivityLoading(true);
+    auditLogApi.list(currentTenant.id, { limit: ACTIVITY_PAGE_SIZE, offset: activityPage * ACTIVITY_PAGE_SIZE })
+      .then((d) => { setActivityLogs(d.logs ?? []); setActivityTotal(d.total ?? 0); })
+      .catch(() => {})
+      .finally(() => setActivityLoading(false));
+  }, [tab, currentTenant?.id, activityPage]);
 
   // ── Framework selector ────────────────────────────────────────────────────
   const [frameworks, setFrameworks] = useState<FrameworkOption[]>([]);
@@ -426,13 +443,13 @@ export default function Settings() {
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 20 }}>Settings</h1>
 
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', marginBottom: 24 }}>
-        {(['profile', ...(isAdmin ? ['users', 'sso'] : [])] as Tab[]).map((t) => (
+        {(['profile', ...(isAdmin ? ['users', 'sso', 'activity'] : [])] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '8px 20px', fontSize: 14, fontWeight: 500, border: 'none',
             borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
             backgroundColor: 'transparent', color: tab === t ? '#2563eb' : '#6b7280', cursor: 'pointer',
           }}>
-            {t === 'profile' ? 'Profile' : t === 'users' ? 'Users' : 'SSO Configuration'}
+            {t === 'profile' ? 'Profile' : t === 'users' ? 'Users' : t === 'sso' ? 'SSO Configuration' : 'Activity Log'}
           </button>
         ))}
       </div>
@@ -682,6 +699,77 @@ export default function Settings() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Activity Log ── */}
+      {tab === 'activity' && isAdmin && (
+        <div>
+          <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
+            Immutable record of all actions performed in this tenant.
+          </p>
+          {activityLoading ? (
+            <p style={{ color: '#9ca3af', fontSize: 14 }}>Loading…</p>
+          ) : activityLogs.length === 0 ? (
+            <p style={{ color: '#9ca3af', fontSize: 14 }}>No activity recorded yet.</p>
+          ) : (
+            <>
+              <div style={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #f3f4f6', backgroundColor: '#f9fafb' }}>
+                      <th style={thStyle}>When</th>
+                      <th style={thStyle}>User</th>
+                      <th style={thStyle}>Action</th>
+                      <th style={thStyle}>Resource</th>
+                      <th style={thStyle}>IP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activityLogs.map((log) => (
+                      <tr key={log.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                        <td style={{ ...tdStyle, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                          {new Date(log.created_at).toLocaleString()}
+                        </td>
+                        <td style={tdStyle}>
+                          <div style={{ fontWeight: 500, color: '#111827' }}>{log.user_name ?? '—'}</div>
+                          {log.user_email && log.user_email !== log.user_name && (
+                            <div style={{ fontSize: 11, color: '#9ca3af' }}>{log.user_email}</div>
+                          )}
+                        </td>
+                        <td style={tdStyle}>
+                          <span style={{
+                            fontFamily: 'monospace', fontSize: 12,
+                            backgroundColor: '#f3f4f6', color: '#374151',
+                            padding: '2px 6px', borderRadius: 4,
+                          }}>{log.action}</span>
+                        </td>
+                        <td style={{ ...tdStyle, color: '#6b7280' }}>
+                          {log.resource_type && <span>{log.resource_type}</span>}
+                          {log.resource_id && <span style={{ color: '#9ca3af', fontSize: 11, marginLeft: 4 }}>{log.resource_id.slice(0, 8)}…</span>}
+                        </td>
+                        <td style={{ ...tdStyle, color: '#9ca3af', fontFamily: 'monospace', fontSize: 11 }}>
+                          {log.ip_address ?? '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {/* Pagination */}
+              {activityTotal > ACTIVITY_PAGE_SIZE && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, fontSize: 13, color: '#6b7280' }}>
+                  <span>
+                    Showing {activityPage * ACTIVITY_PAGE_SIZE + 1}–{Math.min((activityPage + 1) * ACTIVITY_PAGE_SIZE, activityTotal)} of {activityTotal}
+                  </span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => setActivityPage((p) => p - 1)} disabled={activityPage === 0} style={ghostBtnStyle}>← Previous</button>
+                    <button onClick={() => setActivityPage((p) => p + 1)} disabled={(activityPage + 1) * ACTIVITY_PAGE_SIZE >= activityTotal} style={ghostBtnStyle}>Next →</button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 

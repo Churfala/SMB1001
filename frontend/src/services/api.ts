@@ -140,6 +140,26 @@ export const frameworkApi = {
   list: () => api.get('/frameworks').then((r) => r.data),
 };
 
+// Tasks
+export const taskApi = {
+  list: (tenantId: string, params?: Record<string, string>) =>
+    api.get(`/tenants/${tenantId}/tasks`, { params }).then((r) => r.data),
+  summary: (tenantId: string) =>
+    api.get(`/tenants/${tenantId}/tasks/summary`).then((r) => r.data),
+  create: (tenantId: string, data: Record<string, unknown>) =>
+    api.post(`/tenants/${tenantId}/tasks`, data).then((r) => r.data),
+  update: (tenantId: string, taskId: string, data: Record<string, unknown>) =>
+    api.put(`/tenants/${tenantId}/tasks/${taskId}`, data).then((r) => r.data),
+  remove: (tenantId: string, taskId: string) =>
+    api.delete(`/tenants/${tenantId}/tasks/${taskId}`),
+};
+
+// Audit logs
+export const auditLogApi = {
+  list: (tenantId: string, params?: Record<string, string | number>) =>
+    api.get(`/tenants/${tenantId}/audit-logs`, { params }).then((r) => r.data),
+};
+
 // Settings
 export const settingsApi = {
   getSsoPublic: () => api.get('/settings/sso/public').then((r) => r.data),

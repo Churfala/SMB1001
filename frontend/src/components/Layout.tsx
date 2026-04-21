@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
-import { assessmentApi } from '../services/api';
+import { assessmentApi, taskApi } from '../services/api';
 import type { Tenant } from '../types';
 
 export default function Layout() {
@@ -10,12 +10,16 @@ export default function Layout() {
   const { tenants, currentTenant, setCurrentTenant } = useTenant();
   const navigate = useNavigate();
   const location = useLocation();
-  const [overdueCount, setOverdueCount] = useState(0);
+  const [overdueCount, setOverdueCount]   = useState(0);
+  const [taskOpenCount, setTaskOpenCount] = useState(0);
 
   useEffect(() => {
     if (!currentTenant) return;
     assessmentApi.overdueCount(currentTenant.id)
       .then((d) => setOverdueCount(d.count ?? 0))
+      .catch(() => {});
+    taskApi.summary(currentTenant.id)
+      .then((d) => setTaskOpenCount((d.open ?? 0) + (d.in_progress ?? 0)))
       .catch(() => {});
   }, [currentTenant?.id]);
 
@@ -72,6 +76,7 @@ export default function Layout() {
           <div style={{ display: 'flex', gap: 24 }}>
             {navLink('/dashboard', 'Dashboard')}
             {navLink('/controls', 'Controls', overdueCount > 0 ? overdueCount : undefined)}
+            {navLink('/tasks', 'Tasks', taskOpenCount > 0 ? taskOpenCount : undefined)}
             {user?.role === 'admin' && navLink('/tenants', 'Tenants')}
             {navLink('/settings', 'Settings')}
           </div>

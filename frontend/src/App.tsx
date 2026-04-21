@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import Controls from './pages/Controls';
+import Tasks from './pages/Tasks';
 import Tenants from './pages/Tenants';
 import Settings from './pages/Settings';
 
@@ -46,6 +47,7 @@ export default function App() {
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="controls" element={<Controls />} />
+        <Route path="tasks" element={<Tasks />} />
         <Route
           path="tenants"
           element={
