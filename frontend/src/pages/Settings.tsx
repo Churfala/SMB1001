@@ -294,7 +294,7 @@ export default function Settings() {
   const [userExclusions, setUserExclusions] = useState<Record<string, string[]>>({}); // userId → excluded tenantId[]
   const [accessUpdating, setAccessUpdating] = useState<string | null>(null);
   const [showAddUser, setShowAddUser] = useState(false);
-  const [addForm, setAddForm] = useState({ email: '', first_name: '', last_name: '', role: 'auditor' as UserRole, password: '' });
+  const [addForm, setAddForm] = useState({ email: '', first_name: '', last_name: '', role: 'auditor' as UserRole, password: '', tenantId: '' });
   const [addSaving, setAddSaving] = useState(false);
   const [addMsg, setAddMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [roleUpdating, setRoleUpdating] = useState<string | null>(null);
@@ -324,20 +324,26 @@ export default function Settings() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentTenant) return;
+    const targetTenantId = addForm.tenantId || currentTenant.id;
+    const targetTenant = allTenants.find((t) => t.id === targetTenantId);
     setAddSaving(true); setAddMsg(null);
     try {
-      await tenantApi.createUser(currentTenant.id, {
+      await tenantApi.createUser(targetTenantId, {
         email: addForm.email,
         firstName: addForm.first_name || undefined,
         lastName: addForm.last_name || undefined,
         role: addForm.role,
         password: addForm.password || undefined,
       });
-      setAddMsg({ ok: true, text: `User ${addForm.email} created` });
-      setAddForm({ email: '', first_name: '', last_name: '', role: 'auditor', password: '' });
+      const tenantLabel = targetTenant?.name ?? targetTenantId;
+      setAddMsg({ ok: true, text: `User ${addForm.email} created under ${tenantLabel}` });
+      setAddForm({ email: '', first_name: '', last_name: '', role: 'auditor', password: '', tenantId: currentTenant.id });
       setShowAddUser(false);
-      const d = await tenantApi.listUsers(currentTenant.id);
-      setUsers(d.users ?? []);
+      // Refresh list only if we created in the currently viewed tenant
+      if (targetTenantId === currentTenant.id) {
+        const d = await tenantApi.listUsers(currentTenant.id);
+        setUsers(d.users ?? []);
+      }
     } catch (err: unknown) {
       setAddMsg({ ok: false, text: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to create user' });
     } finally { setAddSaving(false); }
@@ -573,7 +579,11 @@ export default function Settings() {
             <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>
               Manage users for this ControlCheck instance.
             </p>
-            <button onClick={() => { setShowAddUser((v) => !v); setAddMsg(null); }} style={btnStyle(false)}>
+            <button onClick={() => {
+              if (!showAddUser) setAddForm((f) => ({ ...f, tenantId: currentTenant?.id ?? '' }));
+              setShowAddUser((v) => !v);
+              setAddMsg(null);
+            }} style={btnStyle(false)}>
               {showAddUser ? 'Cancel' : '+ Add User'}
             </button>
           </div>
@@ -595,6 +605,23 @@ export default function Settings() {
                       <option value="client">Client (own tenant only — can upload evidence)</option>
                       <option value="readonly">Read Only (own tenant only — view only)</option>
                       <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>
+                      Tenant
+                      {(addForm.role === 'client' || addForm.role === 'readonly') && (
+                        <span style={{ color: '#f59e0b', fontWeight: 400, marginLeft: 6 }}>— determines access</span>
+                      )}
+                    </label>
+                    <select
+                      value={addForm.tenantId || currentTenant?.id}
+                      onChange={(e) => setAddForm((f) => ({ ...f, tenantId: e.target.value }))}
+                      style={inputStyle}
+                    >
+                      {allTenants.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div>
