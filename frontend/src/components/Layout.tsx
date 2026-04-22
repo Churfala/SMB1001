@@ -78,7 +78,7 @@ export default function Layout() {
             {navLink('/controls', 'Controls', overdueCount > 0 ? overdueCount : undefined)}
             {navLink('/tasks', 'Tasks', taskOpenCount > 0 ? taskOpenCount : undefined)}
             {user?.role === 'admin' && navLink('/tenants', 'Tenants')}
-            {navLink('/settings', 'Settings')}
+            {user?.role === 'admin' && navLink('/settings', 'Settings')}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

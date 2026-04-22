@@ -177,13 +177,7 @@ interface TenantUser {
 export default function Settings() {
   const { user } = useAuth();
   const { currentTenant, reload } = useTenant();
-  const isAdmin = user?.role === 'admin';
   const [tab, setTab] = useState<Tab>('profile');
-
-  // Redirect non-admins away from admin tabs
-  useEffect(() => {
-    if (!isAdmin && (tab === 'users' || tab === 'sso' || tab === 'activity')) setTab('profile');
-  }, [isAdmin, tab]);
 
   // ── Activity log ─────────────────────────────────────────────────────────
   const [activityLogs, setActivityLogs]   = useState<AuditLogEntry[]>([]);
@@ -211,7 +205,7 @@ export default function Settings() {
   }, []);
 
   const handleFrameworkChange = async (frameworkId: string) => {
-    if (!currentTenant || !isAdmin) return;
+    if (!currentTenant) return;
     setFrameworkSaving(true);
     setFrameworkMsg(null);
     try {
@@ -443,7 +437,7 @@ export default function Settings() {
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 20 }}>Settings</h1>
 
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', marginBottom: 24 }}>
-        {(['profile', ...(isAdmin ? ['users', 'sso', 'activity'] : [])] as Tab[]).map((t) => (
+        {(['profile', 'users', 'sso', 'activity'] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '8px 20px', fontSize: 14, fontWeight: 500, border: 'none',
             borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
@@ -465,7 +459,7 @@ export default function Settings() {
             <div style={{ fontSize: 12, fontWeight: 500, color: '#6b7280', marginBottom: 2 }}>Role</div>
             <div style={{ fontSize: 14, color: '#111827', textTransform: 'capitalize' }}>{user?.role}</div>
           </div>
-          {isAdmin && currentTenant && frameworks.length > 0 && (
+          {currentTenant && frameworks.length > 0 && (
             <>
               <hr style={{ border: 'none', borderTop: '1px solid #f3f4f6', margin: '0 0 20px' }} />
               <h2 style={{ fontSize: 15, fontWeight: 600, color: '#111827', margin: '0 0 6px' }}>Compliance Framework</h2>
@@ -524,7 +518,7 @@ export default function Settings() {
       )}
 
       {/* ── Users ── */}
-      {tab === 'users' && isAdmin && (
+      {tab === 'users' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <p style={{ margin: 0, fontSize: 14, color: '#6b7280' }}>
@@ -703,7 +697,7 @@ export default function Settings() {
       )}
 
       {/* ── Activity Log ── */}
-      {tab === 'activity' && isAdmin && (
+      {tab === 'activity' && (
         <div>
           <p style={{ fontSize: 13, color: '#6b7280', marginTop: 0, marginBottom: 16 }}>
             Immutable record of all actions performed in this tenant.
@@ -774,7 +768,7 @@ export default function Settings() {
       )}
 
       {/* ── SSO ── */}
-      {tab === 'sso' && isAdmin && (
+      {tab === 'sso' && (
         <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: 24 }}>
           {ssoLoading ? <p style={{ color: '#9ca3af', fontSize: 14 }}>Loading…</p> : (
             <form onSubmit={handleSaveSso} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

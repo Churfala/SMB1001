@@ -56,7 +56,14 @@ export default function App() {
             </AdminRoute>
           }
         />
-        <Route path="settings" element={<Settings />} />
+        <Route
+          path="settings"
+          element={
+            <AdminRoute>
+              <Settings />
+            </AdminRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
