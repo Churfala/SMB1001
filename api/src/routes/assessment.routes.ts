@@ -27,7 +27,7 @@ export async function assessmentRoutes(app: FastifyInstance) {
 
   app.put(
     '/:tenantId/assessments/:controlId',
-    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any },
+    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor', 'client')] as any },
     assessmentController.upsert,
   );
 
@@ -39,13 +39,13 @@ export async function assessmentRoutes(app: FastifyInstance) {
 
   app.post(
     '/:tenantId/assessments/:controlId/evidence/text',
-    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any },
+    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor', 'client')] as any },
     assessmentController.addTextEvidence,
   );
 
   app.post(
     '/:tenantId/assessments/:controlId/evidence/file',
-    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor')] as any },
+    { preHandler: [validateTenantAccess, requireRole('admin', 'auditor', 'client')] as any },
     assessmentController.uploadFileEvidence,
   );
 

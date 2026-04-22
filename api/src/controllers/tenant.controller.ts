@@ -13,6 +13,12 @@ export const tenantController = {
       const result = await tenantService.list(limit, offset);
       return reply.send(result);
     }
+    if (request.user.role === 'client') {
+      // Clients see only their own tenant
+      const tenant = await tenantService.getById(request.user.tenant_id);
+      const tenants = tenant ? [tenant] : [];
+      return reply.send({ tenants, total: tenants.length });
+    }
     // Non-admin: all tenants except those explicitly excluded for this user
     const tenants = await tenantService.listForUser(request.user.sub);
     return reply.send({ tenants, total: tenants.length });
@@ -120,8 +126,8 @@ export const tenantController = {
       return reply.status(400).send({ error: 'Bad Request', message: 'email and role are required' });
     }
 
-    if (!['admin', 'auditor', 'readonly'].includes(role)) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'role must be admin, auditor, or readonly' });
+    if (!['admin', 'auditor', 'readonly', 'client'].includes(role)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'role must be admin, auditor, readonly, or client' });
     }
 
     if (password && password.length < 12) {

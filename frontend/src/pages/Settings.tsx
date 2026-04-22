@@ -591,9 +591,10 @@ export default function Settings() {
                   <div>
                     <label style={labelStyle}>Role</label>
                     <select value={addForm.role} onChange={(e) => setAddForm((f) => ({ ...f, role: e.target.value as UserRole }))} style={inputStyle}>
-                      <option value="auditor">Auditor</option>
+                      <option value="auditor">Auditor (MSP staff — all tenants)</option>
+                      <option value="client">Client (own tenant only — can upload evidence)</option>
+                      <option value="readonly">Read Only (own tenant only — view only)</option>
                       <option value="admin">Admin</option>
-                      <option value="readonly">Read Only</option>
                     </select>
                   </div>
                   <div>
@@ -664,6 +665,7 @@ export default function Settings() {
                           >
                             <option value="admin">Admin</option>
                             <option value="auditor">Auditor</option>
+                            <option value="client">Client</option>
                             <option value="readonly">Read Only</option>
                           </select>
                         )}

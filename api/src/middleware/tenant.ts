@@ -29,7 +29,22 @@ export async function validateTenantAccess(
     return;
   }
 
-  // Non-admin: access any non-suspended tenant UNLESS explicitly excluded
+  if (user.role === 'client') {
+    // Clients may only access the tenant their account belongs to
+    if (tenantId !== user.tenant_id) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to this tenant' });
+    }
+    const tenant = await queryOne(
+      'SELECT id FROM tenants WHERE id = $1 AND status != $2',
+      [tenantId, 'suspended'],
+    );
+    if (!tenant) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Tenant not found' });
+    }
+    return;
+  }
+
+  // Non-admin/non-client: access any non-suspended tenant UNLESS explicitly excluded
   const access = await queryOne<{ ok: boolean }>(
     `SELECT TRUE AS ok
      FROM tenants t

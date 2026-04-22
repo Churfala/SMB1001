@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'auditor' | 'readonly';
+export type UserRole = 'admin' | 'auditor' | 'readonly' | 'client';
 export type ControlSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface User {

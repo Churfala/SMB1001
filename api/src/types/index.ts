@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'auditor' | 'readonly';
+export type UserRole = 'admin' | 'auditor' | 'readonly' | 'client';
 export type IntegrationType = 'm365';
 export type ControlSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type ValidationType = 'automated' | 'manual' | 'hybrid';
