@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { settingsApi } from '../services/api';
 
@@ -12,12 +12,14 @@ export default function Login() {
 
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
+  const [info, setInfo] = useState('');
   const [loading, setLoading] = useState(false);
   const [ssoInfo, setSsoInfo] = useState<{ is_enabled: boolean; provider_label: string } | null>(null);
 
   useEffect(() => {
     const ssoError = searchParams.get('sso_error');
     if (ssoError) setError(ssoError);
+    if (searchParams.get('reset') === '1') setInfo('Password updated successfully. Please sign in with your new password.');
   }, [searchParams]);
 
   useEffect(() => {
@@ -76,6 +78,12 @@ export default function Login() {
           <p style={{ fontSize: 14, color: '#6b7280', margin: '6px 0 0' }}>MSP Compliance Platform</p>
         </div>
 
+        {info && (
+          <div style={{ backgroundColor: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: 6, fontSize: 13, marginBottom: 20 }}>
+            {info}
+          </div>
+        )}
+
         {/* SSO button — only shown when configured and enabled */}
         {ssoInfo?.is_enabled && (
           <>
@@ -130,9 +138,12 @@ export default function Login() {
           </div>
 
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, color: '#374151', marginBottom: 6 }}>
-              Password
-            </label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <label style={{ fontSize: 13, fontWeight: 500, color: '#374151' }}>Password</label>
+              <Link to="/forgot-password" style={{ fontSize: 12, color: '#2563eb', textDecoration: 'none' }}>
+                Forgot password?
+              </Link>
+            </div>
             <input
               type="password"
               value={form.password}

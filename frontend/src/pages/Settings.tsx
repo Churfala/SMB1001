@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTenant } from '../contexts/TenantContext';
 import { auditLogApi, authApi, frameworkApi, settingsApi, tenantApi } from '../services/api';
+
 import type { AuditLogEntry } from '../types';
 import type { Tenant, UserRole } from '../types';
 
@@ -11,7 +12,7 @@ interface FrameworkOption {
   name: string;
 }
 
-type Tab = 'profile' | 'users' | 'sso' | 'activity';
+type Tab = 'profile' | 'users' | 'sso' | 'email' | 'activity';
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 const suggestedCallback = `${API_BASE.startsWith('http') ? API_BASE : window.location.origin + API_BASE}/auth/sso/callback`;
@@ -178,6 +179,54 @@ export default function Settings() {
   const { user } = useAuth();
   const { currentTenant, reload } = useTenant();
   const [tab, setTab] = useState<Tab>('profile');
+
+  // ── Email / SMTP ─────────────────────────────────────────────────────────
+  const [smtp, setSmtp] = useState({
+    host: '', port: 587, secure: false, username: '', password: '',
+    from_address: 'ControlCheck <noreply@controlcheck.app>',
+    is_enabled: false, password_set: false,
+  });
+  const [smtpLoading, setSmtpLoading]   = useState(false);
+  const [smtpSaving, setSmtpSaving]     = useState(false);
+  const [smtpTesting, setSmtpTesting]   = useState(false);
+  const [smtpMsg, setSmtpMsg]           = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (tab !== 'email') return;
+    setSmtpLoading(true);
+    settingsApi.getSmtp()
+      .then((d) => setSmtp((s) => ({ ...s, ...d, password: '' })))
+      .catch(() => {})
+      .finally(() => setSmtpLoading(false));
+  }, [tab]);
+
+  const handleSaveSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmtpSaving(true); setSmtpMsg(null);
+    try {
+      const payload: Record<string, unknown> = {
+        host: smtp.host, port: smtp.port, secure: smtp.secure,
+        username: smtp.username, from_address: smtp.from_address, is_enabled: smtp.is_enabled,
+      };
+      if (smtp.password) payload.password = smtp.password;
+      await settingsApi.updateSmtp(payload);
+      setSmtpMsg({ ok: true, text: 'Email settings saved.' });
+      const d = await settingsApi.getSmtp();
+      setSmtp((s) => ({ ...s, ...d, password: '' }));
+    } catch (err: unknown) {
+      setSmtpMsg({ ok: false, text: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed to save' });
+    } finally { setSmtpSaving(false); }
+  };
+
+  const handleTestSmtp = async () => {
+    setSmtpTesting(true); setSmtpMsg(null);
+    try {
+      const d = await settingsApi.testSmtp();
+      setSmtpMsg({ ok: true, text: `Test email sent to ${d.sent_to}` });
+    } catch (err: unknown) {
+      setSmtpMsg({ ok: false, text: (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Test failed' });
+    } finally { setSmtpTesting(false); }
+  };
 
   // ── Activity log ─────────────────────────────────────────────────────────
   const [activityLogs, setActivityLogs]   = useState<AuditLogEntry[]>([]);
@@ -437,13 +486,13 @@ export default function Settings() {
       <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 20 }}>Settings</h1>
 
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', marginBottom: 24 }}>
-        {(['profile', 'users', 'sso', 'activity'] as Tab[]).map((t) => (
+        {(['profile', 'users', 'sso', 'email', 'activity'] as Tab[]).map((t) => (
           <button key={t} onClick={() => setTab(t)} style={{
             padding: '8px 20px', fontSize: 14, fontWeight: 500, border: 'none',
             borderBottom: tab === t ? '2px solid #2563eb' : '2px solid transparent',
             backgroundColor: 'transparent', color: tab === t ? '#2563eb' : '#6b7280', cursor: 'pointer',
           }}>
-            {t === 'profile' ? 'Profile' : t === 'users' ? 'Users' : t === 'sso' ? 'SSO Configuration' : 'Activity Log'}
+            {t === 'profile' ? 'Profile' : t === 'users' ? 'Users' : t === 'sso' ? 'SSO' : t === 'email' ? 'Email' : 'Activity Log'}
           </button>
         ))}
       </div>
@@ -693,6 +742,76 @@ export default function Settings() {
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Email ── */}
+      {tab === 'email' && (
+        <div style={{ backgroundColor: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: 24 }}>
+          {smtpLoading ? <p style={{ color: '#9ca3af', fontSize: 14 }}>Loading…</p> : (
+            <form onSubmit={handleSaveSmtp} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#6b7280', lineHeight: 1.5 }}>
+                Configure outbound email for password reset links and task notifications.
+                Leave password blank to keep the existing saved password.
+              </p>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input type="checkbox" checked={smtp.is_enabled} onChange={(e) => setSmtp((s) => ({ ...s, is_enabled: e.target.checked }))} style={{ width: 16, height: 16 }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>Enable email sending</span>
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
+                <div>
+                  <label style={labelStyle}>SMTP Host</label>
+                  <input value={smtp.host} onChange={(e) => setSmtp((s) => ({ ...s, host: e.target.value }))} placeholder="smtp.office365.com" style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Port</label>
+                  <input type="number" value={smtp.port} onChange={(e) => setSmtp((s) => ({ ...s, port: parseInt(e.target.value) || 587 }))} style={inputStyle} />
+                </div>
+              </div>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input type="checkbox" checked={smtp.secure} onChange={(e) => setSmtp((s) => ({ ...s, secure: e.target.checked }))} style={{ width: 16, height: 16 }} />
+                <span style={{ fontSize: 14, color: '#374151' }}>Use SSL/TLS <span style={{ color: '#9ca3af', fontSize: 12, fontWeight: 400 }}>(port 465 — leave unchecked for STARTTLS on 587)</span></span>
+              </label>
+
+              <div>
+                <label style={labelStyle}>Username</label>
+                <input value={smtp.username} onChange={(e) => setSmtp((s) => ({ ...s, username: e.target.value }))} placeholder="noreply@yourdomain.com" style={inputStyle} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>
+                  Password
+                  {smtp.password_set && <span style={{ marginLeft: 8, color: '#16a34a', fontSize: 11, fontWeight: 600 }}>✓ saved</span>}
+                </label>
+                <input type="password" value={smtp.password} onChange={(e) => setSmtp((s) => ({ ...s, password: e.target.value }))}
+                  placeholder={smtp.password_set ? '•••••••• (leave blank to keep)' : 'SMTP password or app password'} style={inputStyle} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>From Address</label>
+                <input value={smtp.from_address} onChange={(e) => setSmtp((s) => ({ ...s, from_address: e.target.value }))}
+                  placeholder="ControlCheck <noreply@yourdomain.com>" style={inputStyle} />
+              </div>
+
+              {smtpMsg && (
+                <div style={{ backgroundColor: smtpMsg.ok ? '#dcfce7' : '#fee2e2', color: smtpMsg.ok ? '#16a34a' : '#991b1b', padding: '8px 12px', borderRadius: 6, fontSize: 13 }}>
+                  {smtpMsg.text}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button type="submit" disabled={smtpSaving} style={btnStyle(smtpSaving)}>
+                  {smtpSaving ? 'Saving…' : 'Save Email Settings'}
+                </button>
+                <button type="button" onClick={handleTestSmtp} disabled={smtpTesting} style={{ ...btnStyle(smtpTesting), backgroundColor: smtpTesting ? '#d1d5db' : '#f3f4f6', color: '#374151' }}>
+                  {smtpTesting ? 'Sending…' : 'Send Test Email'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
 

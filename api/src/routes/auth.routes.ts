@@ -41,4 +41,10 @@ export async function authRoutes(app: FastifyInstance) {
 
   // POST /auth/change-password
   app.post('/change-password', { preHandler: [authenticate] }, authController.changePassword);
+
+  // POST /auth/forgot-password  (public — no auth required)
+  app.post('/forgot-password', authController.forgotPassword);
+
+  // POST /auth/reset-password  (public — validated by token)
+  app.post('/reset-password', authController.resetPassword);
 }

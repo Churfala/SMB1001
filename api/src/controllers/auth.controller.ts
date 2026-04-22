@@ -3,6 +3,7 @@ import axios from 'axios';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { authService } from '../services/auth.service';
 import { auditLogService } from '../services/audit-log.service';
+import { emailService } from '../services/email.service';
 import { query, queryOne } from '../config/database';
 import { env } from '../config/env';
 import { decrypt } from '../services/encryption.service';
@@ -289,5 +290,77 @@ export const authController = {
       const message = err instanceof Error ? err.message : 'Password change failed';
       return reply.status(400).send({ error: 'Bad Request', message });
     }
+  },
+
+  // POST /auth/forgot-password
+  async forgotPassword(request: FastifyRequest, reply: FastifyReply) {
+    const { email } = request.body as { email: string };
+
+    // Always return 200 — never reveal whether the email exists
+    if (!email) return reply.send({ message: 'If that address is registered you will receive an email shortly.' });
+
+    const user = await queryOne<{ id: string; email: string; first_name: string | null; password_hash: string }>(
+      `SELECT u.id, u.email, u.first_name, u.password_hash
+       FROM users u
+       WHERE LOWER(u.email) = LOWER($1) AND u.is_active = true`,
+      [email],
+    );
+
+    // Don't send reset links to SSO-only accounts (empty password_hash)
+    if (user && user.password_hash !== '') {
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+      await query(
+        `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+         VALUES ($1, $2, $3)`,
+        [user.id, token, expiresAt],
+      );
+
+      const resetUrl = `${env.FRONTEND_URL}/reset-password?token=${token}`;
+      emailService.sendPasswordReset({
+        to:       user.email,
+        name:     user.first_name ?? user.email,
+        resetUrl,
+      });
+    }
+
+    return reply.send({ message: 'If that address is registered you will receive an email shortly.' });
+  },
+
+  // POST /auth/reset-password
+  async resetPassword(request: FastifyRequest, reply: FastifyReply) {
+    const { token, password } = request.body as { token: string; password: string };
+
+    if (!token || !password) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'token and password are required' });
+    }
+    if (password.length < 12) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Password must be at least 12 characters' });
+    }
+
+    const row = await queryOne<{ id: string; user_id: string; expires_at: Date; used_at: Date | null }>(
+      'SELECT id, user_id, expires_at, used_at FROM password_reset_tokens WHERE token = $1',
+      [token],
+    );
+
+    if (!row)              return reply.status(400).send({ error: 'Bad Request', message: 'Invalid or expired reset link' });
+    if (row.used_at)       return reply.status(400).send({ error: 'Bad Request', message: 'This reset link has already been used' });
+    if (new Date() > new Date(row.expires_at)) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'This reset link has expired. Please request a new one.' });
+    }
+
+    const hash = await authService.hashPassword(password);
+    await query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [hash, row.user_id]);
+    await query('UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1', [row.id]);
+
+    await auditLogService.log({
+      userId: row.user_id,
+      action: 'user.password_reset',
+      ipAddress: request.ip,
+      userAgent: request.headers['user-agent'],
+    });
+
+    return reply.send({ message: 'Password updated successfully' });
   },
 };

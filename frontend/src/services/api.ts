@@ -166,6 +166,17 @@ export const settingsApi = {
   getSso: () => api.get('/settings/sso').then((r) => r.data),
   updateSso: (data: Record<string, unknown>) =>
     api.put('/settings/sso', data).then((r) => r.data),
+  getSmtp: () => api.get('/settings/smtp').then((r) => r.data),
+  updateSmtp: (data: Record<string, unknown>) =>
+    api.put('/settings/smtp', data).then((r) => r.data),
+  testSmtp: () => api.post('/settings/smtp/test').then((r) => r.data),
+};
+
+export const passwordApi = {
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }).then((r) => r.data),
+  resetPassword: (token: string, password: string) =>
+    api.post('/auth/reset-password', { token, password }).then((r) => r.data),
 };
 
 export default api;
