@@ -185,8 +185,11 @@ export default function Controls() {
   const domainLabel = currentTenant?.framework_domain_label ?? 'Domain';
 
   // ── Dynamic domain list derived from loaded controls ─────────────────
+  // Preserve the order domains first appear in the controls array.
+  // Controls arrive pre-sorted numerically by control_id from the API,
+  // so first-appearance order matches domain 1, 2, 3… correctly.
   const sortedDomains = useMemo(
-    () => [...new Set(controls.map((c) => c.category))].sort(),
+    () => [...new Set(controls.map((c) => c.category))],
     [controls],
   );
   const domainColor = (domain: string): string =>
