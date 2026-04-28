@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { assessmentApi } from '../services/api';
 import { useTenant } from '../contexts/TenantContext';
+import { TIERS } from '../utils/tiers';
 import type { Tenant } from '../types';
 
 interface TenantSummary {
@@ -12,11 +13,12 @@ interface TenantSummary {
   not_assessed: number;
   total: number;
   overdue: number;
+  achieved_tier: number;
 }
 
 const EMPTY: TenantSummary = {
   pass: 0, fail: 0, partial: 0, not_applicable: 0,
-  not_assessed: 0, total: 0, overdue: 0,
+  not_assessed: 0, total: 0, overdue: 0, achieved_tier: 0,
 };
 
 export default function Dashboard() {
@@ -118,9 +120,12 @@ export default function Dashboard() {
 
                 {/* Data row */}
                 <div style={dataRow}>
-                  {/* Client name + sub-line */}
+                  {/* Client name + tier badge + sub-line */}
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{tenant.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{tenant.name}</span>
+                      <TierBadge tier={s.achieved_tier} />
+                    </div>
                     <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
                       {assessed === 0
                         ? 'No assessments yet'
@@ -181,6 +186,29 @@ export default function Dashboard() {
         ))}
       </div>
     </div>
+  );
+}
+
+function TierBadge({ tier }: { tier: number }) {
+  if (tier === 0) return null;
+  const t = TIERS.find((x) => x.tier === tier);
+  if (!t) return null;
+  return (
+    <span style={{
+      display: 'inline-block',
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '0.03em',
+      padding: '2px 7px',
+      borderRadius: 4,
+      backgroundColor: t.bg,
+      color: t.color,
+      border: `1px solid ${t.color}22`,
+      lineHeight: 1.5,
+      whiteSpace: 'nowrap',
+    }}>
+      {t.name}
+    </span>
   );
 }
 

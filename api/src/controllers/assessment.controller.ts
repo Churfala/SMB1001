@@ -99,6 +99,8 @@ export const assessmentController = {
         pass: number; fail: number; partial: number;
         not_applicable: number; not_assessed: number;
         total: number; overdue: number;
+        tier1_fail: number; tier2_fail: number; tier3_fail: number;
+        tier4_fail: number; tier5_fail: number;
       }>(
         `SELECT
            COUNT(*) FILTER (WHERE COALESCE(a.status, 'not_assessed') = 'pass')            AS pass,
@@ -107,7 +109,12 @@ export const assessmentController = {
            COUNT(*) FILTER (WHERE COALESCE(a.status, 'not_assessed') = 'not_applicable')  AS not_applicable,
            COUNT(*) FILTER (WHERE a.id IS NULL)                                            AS not_assessed,
            COUNT(*)                                                                         AS total,
-           COUNT(*) FILTER (WHERE a.review_date IS NOT NULL AND a.review_date < CURRENT_DATE) AS overdue
+           COUNT(*) FILTER (WHERE a.review_date IS NOT NULL AND a.review_date < CURRENT_DATE) AS overdue,
+           COUNT(*) FILTER (WHERE c.tier <= 1 AND COALESCE(a.status, 'not_assessed') NOT IN ('pass', 'not_applicable')) AS tier1_fail,
+           COUNT(*) FILTER (WHERE c.tier <= 2 AND COALESCE(a.status, 'not_assessed') NOT IN ('pass', 'not_applicable')) AS tier2_fail,
+           COUNT(*) FILTER (WHERE c.tier <= 3 AND COALESCE(a.status, 'not_assessed') NOT IN ('pass', 'not_applicable')) AS tier3_fail,
+           COUNT(*) FILTER (WHERE c.tier <= 4 AND COALESCE(a.status, 'not_assessed') NOT IN ('pass', 'not_applicable')) AS tier4_fail,
+           COUNT(*) FILTER (WHERE c.tier <= 5 AND COALESCE(a.status, 'not_assessed') NOT IN ('pass', 'not_applicable')) AS tier5_fail
          FROM controls c
          JOIN tenants t ON t.id = $1
          LEFT JOIN control_assessments a ON a.control_id = c.id AND a.tenant_id = $1
@@ -125,9 +132,14 @@ export const assessmentController = {
       ),
     ]);
 
-    const base = row ?? { pass: 0, fail: 0, partial: 0, not_applicable: 0, not_assessed: 0, total: 0, overdue: 0 };
+    const base = row ?? { pass: 0, fail: 0, partial: 0, not_applicable: 0, not_assessed: 0, total: 0, overdue: 0, tier1_fail: 1, tier2_fail: 1, tier3_fail: 1, tier4_fail: 1, tier5_fail: 1 };
+    const achievedTier = Number(base.total) > 0
+      ? ([5, 4, 3, 2, 1].find((n) => Number(base[`tier${n}_fail` as keyof typeof base]) === 0) ?? 0)
+      : 0;
+    const { tier1_fail: _t1, tier2_fail: _t2, tier3_fail: _t3, tier4_fail: _t4, tier5_fail: _t5, ...summary } = base;
     return reply.send({
-      ...base,
+      ...summary,
+      achieved_tier: achievedTier,
       latest_audit: latestAudit
         ? { id: latestAudit.id, score: latestAudit.score, tiers: latestAudit.summary?.tiers ?? null, completed_at: latestAudit.completed_at }
         : null,
